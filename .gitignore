@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build artifacts & caches
+dist/
+**/dist/
+build/
+**/build/
+.next/
+out/
+*.tsbuildinfo
+.turbo/
+.vercel/
+
+# Environment files
+.env
+.env*.local
+.env.development
+.env.test
+.env.production
+.env.staging
+!.env.example
+!**/.env.example
+
+# Local database & development data
+*.sqlite
+*.sqlite-journal
+postgres_data/
+backend/data/*.json
+!backend/data/.gitkeep
+data/*.json
+!data/.gitkeep
+synctheater.json
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# OS & Editor artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.tmp

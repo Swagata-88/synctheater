@@ -1,0 +1,32 @@
+{
+  "name": "synctheater",
+  "version": "1.0.0",
+  "description": "SYNCTHEATER — Watch Together. Anywhere. In Sync. Real-Time Social Cinema Platform",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
+    "test": "npm run test --workspace=backend && npm run test --workspace=frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "keywords": [
+    "watch-party",
+    "video-synchronization",
+    "real-time",
+    "socket.io",
+    "webrtc",
+    "livekit",
+    "nextjs",
+    "nestjs"
+  ],
+  "author": "SYNCTHEATER Engineering Team",
+  "license": "MIT"
+}

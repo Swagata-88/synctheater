@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #090b10;
+  --foreground: #f3f4f6;
+  --card-bg: #11141f;
+  --border-color: #1f2536;
+  --accent-color: #6366f1;
+}
+
+.theme-light {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card-bg: #ffffff;
+  --border-color: #e2e8f0;
+  --accent-color: #4f46e5;
+}
+
+/* Theater Environments */
+.theater-classic {
+  background: radial-gradient(circle at 50% 20%, #151928 0%, #07090e 100%);
+  --theater-glow: rgba(234, 179, 8, 0.15);
+}
+
+.theater-cozy {
+  background: radial-gradient(circle at 50% 20%, #201a17 0%, #0c0a09 100%);
+  --theater-glow: rgba(245, 158, 11, 0.18);
+}
+
+.theater-gaming {
+  background: radial-gradient(circle at 50% 20%, #1b122c 0%, #06070a 100%);
+  --theater-glow: rgba(168, 85, 247, 0.22);
+}
+
+.theater-minimal {
+  background: #000000;
+  --theater-glow: rgba(255, 255, 255, 0.05);
+}
+
+/* Glassmorphism helpers */
+.glass-panel {
+  background: rgba(17, 20, 31, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-dropdown {
+  background: rgba(15, 18, 28, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Custom Cinema Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Emergency Pause Pulse animation */
+@keyframes emergency-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    border-color: rgba(239, 68, 68, 1);
+  }
+  50% {
+    box-shadow: 0 0 25px 6px rgba(239, 68, 68, 0.3);
+    border-color: rgba(239, 68, 68, 0.6);
+  }
+}
+
+.emergency-active {
+  animation: emergency-pulse 1.8s infinite;
+}
