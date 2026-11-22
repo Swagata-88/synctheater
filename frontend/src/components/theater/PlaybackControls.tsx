@@ -183,6 +183,7 @@ export function PlaybackControls({
           <div>
             <button
               onClick={onEmergencyPause}
+              data-testid="emergency-pause-btn"
               title="Emergency Pause halts playback for everyone immediately"
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white shadow-lg shadow-red-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
             >

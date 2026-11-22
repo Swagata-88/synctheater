@@ -13,6 +13,7 @@ interface VideoPlayerProps {
   playbackRate: number;
   lastServerTimestamp: number;
   isOwnerOrMod: boolean;
+  isEmergencyPaused?: boolean;
   onPlayerReady?: () => void;
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onPlayAction?: () => void;
@@ -36,6 +37,7 @@ export function VideoPlayer({
   playbackRate,
   lastServerTimestamp,
   isOwnerOrMod,
+  isEmergencyPaused,
   onPlayerReady,
   onTimeUpdate,
   onPlayAction,
@@ -237,6 +239,19 @@ export function VideoPlayer({
 
     return () => clearInterval(syncInterval);
   }, [provider, status, currentPosition, playbackRate, lastServerTimestamp, isReady]);
+
+  // Immediate Pause Trigger on Emergency Pause or State Transition
+  useEffect(() => {
+    if ((status === 'PAUSED' || isEmergencyPaused) && isReady) {
+      if (provider === 'YOUTUBE' && ytPlayerRef.current) {
+        try {
+          ytPlayerRef.current.pauseVideo();
+        } catch (e) {}
+      } else if ((provider === 'DIRECT' || provider === 'HLS') && videoElementRef.current) {
+        videoElementRef.current.pause();
+      }
+    }
+  }, [status, isEmergencyPaused, provider, isReady]);
 
   return (
     <div

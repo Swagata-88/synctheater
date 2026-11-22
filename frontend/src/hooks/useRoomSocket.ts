@@ -64,6 +64,10 @@ export function useRoomSocket({ slug, inviteToken, user }: UseRoomSocketOptions)
   const [needsPassword, setNeedsPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
+  // Emergency Pause feedback & error state
+  const [emergencyFeedback, setEmergencyFeedback] = useState<string | null>(null);
+  const [emergencyError, setEmergencyError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!slug || !user) return;
 
@@ -157,6 +161,8 @@ export function useRoomSocket({ slug, inviteToken, user }: UseRoomSocketOptions)
         router.push(`/login?returnUrl=${encodeURIComponent(returnUrl)}`);
       } else if (err.message && err.message.includes('password')) {
         setNeedsPassword(true);
+      } else if (err.code === 'FORBIDDEN' || err.code === 'EMERGENCY_PAUSE_FAILED' || err.code === 'NOT_IN_ROOM') {
+        setEmergencyError(err.message || 'Action failed: permission denied.');
       }
     });
 
@@ -190,12 +196,39 @@ export function useRoomSocket({ slug, inviteToken, user }: UseRoomSocketOptions)
   }, [socket]);
 
   const handleEmergencyPause = useCallback(() => {
-    socket.emit('EMERGENCY_PAUSE');
-  }, [socket]);
+    setEmergencyError(null);
+    if (!socket.connected) {
+      setEmergencyError('Connection lost. Please wait while reconnecting to the theater...');
+      socket.connect();
+      return;
+    }
+
+    socket.emit(
+      'EMERGENCY_PAUSE',
+      { roomSlug: slug },
+      (res?: { success: boolean; error?: string }) => {
+        if (res && !res.success) {
+          setEmergencyError(res.error || 'Failed to activate Emergency Pause.');
+        } else {
+          setEmergencyFeedback('Emergency Pause activated!');
+          setTimeout(() => setEmergencyFeedback(null), 3500);
+        }
+      }
+    );
+  }, [socket, slug]);
 
   const handleResumeFromEmergency = useCallback(() => {
-    socket.emit('RESUME_FROM_EMERGENCY');
-  }, [socket]);
+    setEmergencyError(null);
+    socket.emit(
+      'RESUME_FROM_EMERGENCY',
+      { roomSlug: slug },
+      (res?: { success: boolean; error?: string }) => {
+        if (res && !res.success) {
+          setEmergencyError(res.error || 'Only the room host can clear Emergency Pause.');
+        }
+      }
+    );
+  }, [socket, slug]);
 
   const handleChangeRate = useCallback((rate: number) => {
     socket.emit('CHANGE_PLAYBACK_RATE', { rate });
@@ -276,5 +309,8 @@ export function useRoomSocket({ slug, inviteToken, user }: UseRoomSocketOptions)
     handlePasswordSubmit,
     handleKickParticipant,
     handleTransferOwnership,
+    emergencyFeedback,
+    emergencyError,
+    clearEmergencyError: () => setEmergencyError(null),
   };
 }

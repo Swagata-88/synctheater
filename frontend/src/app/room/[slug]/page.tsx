@@ -68,6 +68,9 @@ function TheaterRoomContent() {
     handlePasswordSubmit,
     handleKickParticipant,
     handleTransferOwnership,
+    emergencyFeedback,
+    emergencyError,
+    clearEmergencyError,
   } = useRoomSocket({ slug, inviteToken, user });
 
   // Role calculation
@@ -124,6 +127,24 @@ function TheaterRoomContent() {
       </div>
 
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-4 lg:px-6 py-4 flex flex-col gap-4">
+        {/* Emergency Pause Feedback / Error Toast */}
+        {emergencyError && (
+          <div className="w-full p-3 rounded-xl bg-red-900/80 border border-red-500/50 text-red-200 text-xs flex items-center justify-between shadow-lg">
+            <span>{emergencyError}</span>
+            <button
+              onClick={clearEmergencyError}
+              className="text-white hover:text-red-300 font-bold px-2 py-0.5 rounded cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        {emergencyFeedback && (
+          <div className="w-full p-3 rounded-xl bg-emerald-900/80 border border-emerald-500/50 text-emerald-200 text-xs flex items-center justify-between shadow-lg animate-pulse">
+            <span>{emergencyFeedback}</span>
+          </div>
+        )}
+
         {/* Emergency Pause Notification */}
         <EmergencyPauseBanner
           isEmergencyPaused={playbackState.isEmergencyPaused}
@@ -178,6 +199,7 @@ function TheaterRoomContent() {
               playbackRate={playbackState.playbackRate}
               lastServerTimestamp={playbackState.lastServerTimestamp}
               isOwnerOrMod={isOwnerOrMod}
+              isEmergencyPaused={playbackState.isEmergencyPaused}
               onTimeUpdate={(c, d) => {
                 setCurrentTime(c);
                 if (d) setDuration(d);
