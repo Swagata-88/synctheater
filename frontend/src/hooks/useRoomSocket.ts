@@ -137,6 +137,28 @@ export function useRoomSocket({ slug, inviteToken, user }: UseRoomSocketOptions)
       }
     });
 
+    socket.on('HOST_TRANSFERRED', (data: { roomSlug: string; newHostId: string; newHostUsername: string; participants?: Participant[] }) => {
+      setRoom((prev: any) => (prev ? { ...prev, ownerId: data.newHostId } : prev));
+      if (data.participants) {
+        setParticipants(data.participants);
+      } else {
+        setParticipants((prev) =>
+          prev.map((p) => {
+            if (p.userId === data.newHostId) return { ...p, role: 'OWNER' as const };
+            if (p.role === 'OWNER') return { ...p, role: 'PARTICIPANT' as const };
+            return p;
+          })
+        );
+      }
+    });
+
+    socket.on('ROOM_CLOSED', (data: { roomSlug: string; reason?: string }) => {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('room_closed_notification', data.reason || 'The host has ended this watch room.');
+      }
+      router.push('/dashboard');
+    });
+
     socket.on('KICKED_FROM_ROOM', (data: { roomSlug: string; reason: string }) => {
       alert(data.reason || 'You have been removed from this theater room.');
       router.push('/dashboard');
@@ -144,7 +166,13 @@ export function useRoomSocket({ slug, inviteToken, user }: UseRoomSocketOptions)
 
     socket.on('ERROR', (err: any) => {
       console.warn('[Socket Room Error]', err);
-      if (err.code === 'INVITE_REQUIRED' || err.message?.includes('invitation')) {
+      if (err.code === 'ROOM_CLOSED' || err.message?.includes('closed by the host') || err.message?.includes('closed')) {
+        setAccessDenied({
+          status: true,
+          title: 'Theater Room Closed',
+          message: err.message || 'This watch room has been closed by the host.',
+        });
+      } else if (err.code === 'INVITE_REQUIRED' || err.message?.includes('invitation')) {
         setAccessDenied({
           status: true,
           title: 'Private Theater — Invitation Required',
@@ -176,6 +204,8 @@ export function useRoomSocket({ slug, inviteToken, user }: UseRoomSocketOptions)
       socket.off('NEW_REACTION');
       socket.off('USER_JOINED');
       socket.off('USER_LEFT');
+      socket.off('HOST_TRANSFERRED');
+      socket.off('ROOM_CLOSED');
       socket.off('KICKED_FROM_ROOM');
       socket.off('ERROR');
     };
@@ -272,17 +302,57 @@ export function useRoomSocket({ slug, inviteToken, user }: UseRoomSocketOptions)
     }
   }, [slug]);
 
+  const handleTransferHost = useCallback(async (newHostId: string) => {
+    const res = await apiRequest<{
+      success: boolean;
+      newHostId: string;
+      newHostUsername: string;
+      room?: any;
+    }>(`/api/rooms/${slug}/transfer-host`, {
+      method: 'POST',
+      body: JSON.stringify({ newHostId }),
+    });
+
+    setRoom((prev: any) => (prev ? { ...prev, ownerId: newHostId } : prev));
+    setParticipants((prev) =>
+      prev.map((p) => {
+        if (p.userId === newHostId) return { ...p, role: 'OWNER' as const };
+        if (p.role === 'OWNER') return { ...p, role: 'PARTICIPANT' as const };
+        return p;
+      })
+    );
+    return res;
+  }, [slug]);
+
   const handleTransferOwnership = useCallback(async (newOwnerId: string) => {
     try {
-      await apiRequest(`/api/rooms/${slug}/transfer-owner`, {
-        method: 'POST',
-        body: JSON.stringify({ newOwnerId }),
-      });
-      window.location.reload();
+      await handleTransferHost(newOwnerId);
     } catch (e: any) {
       alert(e.message || 'Failed to transfer ownership.');
     }
-  }, [slug]);
+  }, [handleTransferHost]);
+
+  const handleLeaveRoom = useCallback(async () => {
+    try {
+      await apiRequest(`/api/rooms/${slug}/leave`, { method: 'POST' });
+    } catch (e) {
+      // Ignore network error on exit
+    }
+    socket.emit('LEAVE_ROOM');
+    router.push('/dashboard');
+  }, [slug, socket, router]);
+
+  const handleEndRoom = useCallback(async () => {
+    const res = await apiRequest<{ success: boolean; message?: string }>(`/api/rooms/${slug}/end`, {
+      method: 'POST',
+    });
+    socket.emit('LEAVE_ROOM');
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('room_closed_notification', 'You have closed the watch room.');
+    }
+    router.push('/dashboard');
+    return res;
+  }, [slug, socket, router]);
 
   return {
     room,
@@ -309,6 +379,9 @@ export function useRoomSocket({ slug, inviteToken, user }: UseRoomSocketOptions)
     handlePasswordSubmit,
     handleKickParticipant,
     handleTransferOwnership,
+    handleTransferHost,
+    handleLeaveRoom,
+    handleEndRoom,
     emergencyFeedback,
     emergencyError,
     clearEmergencyError: () => setEmergencyError(null),

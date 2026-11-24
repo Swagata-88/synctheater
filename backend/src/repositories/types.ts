@@ -8,6 +8,9 @@ import {
   ChatMessage,
   RoomEvent,
   VideoSource,
+  RoomSession,
+  ParticipantAttendance,
+  HostTransferHistory,
 } from '../database/types';
 
 export interface InMemoryDbState {
@@ -20,6 +23,9 @@ export interface InMemoryDbState {
   chatMessages: ChatMessage[];
   roomEvents: RoomEvent[];
   videoSources: VideoSource[];
+  sessions: RoomSession[];
+  attendance: ParticipantAttendance[];
+  hostTransfers: HostTransferHistory[];
 }
 
 export function createInitialInMemoryState(): InMemoryDbState {
@@ -33,5 +39,8 @@ export function createInitialInMemoryState(): InMemoryDbState {
     chatMessages: [],
     roomEvents: [],
     videoSources: [],
+    sessions: [],
+    attendance: [],
+    hostTransfers: [],
   };
 }

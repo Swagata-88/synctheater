@@ -2,19 +2,23 @@ import express from 'express';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
-import { config, validateProductionConfig } from './config';
+import { config, validateProductionConfig, isSmtpConfigured } from './config';
 import { db } from './database';
 import { authRouter } from './modules/auth/auth.controller';
 import { usersRouter } from './modules/users/users.controller';
 import { roomsRouter } from './modules/rooms/rooms.controller';
 import { videoRouter } from './modules/video/video.controller';
 import { livekitRouter } from './modules/livekit/livekit.controller';
+import { historyRouter } from './modules/history/history.controller';
 import { registerSocketGateway } from './realtime/socket.gateway';
 import { authService } from './modules/auth/auth.service';
 import { roomsService } from './modules/rooms/rooms.service';
 
 const app = express();
 const server = http.createServer(app);
+
+// Configure Express trust proxy (essential for Railway and reverse proxy environments)
+app.set('trust proxy', 1);
 
 export function getCorsOriginOption(): cors.CorsOptions['origin'] {
   if (config.env === 'production') {
@@ -59,6 +63,8 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'SYNCTHEATER Realtime Server',
+    environment: config.env,
+    smtpConfigured: isSmtpConfigured(),
     timestamp: new Date().toISOString(),
     version: '1.0.0',
   });
@@ -70,6 +76,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/rooms', roomsRouter);
 app.use('/api/video', videoRouter);
 app.use('/api/livekit', livekitRouter);
+app.use('/api/history', historyRouter);
 
 // Initialize Socket.IO
 const io = new SocketIOServer(server, {

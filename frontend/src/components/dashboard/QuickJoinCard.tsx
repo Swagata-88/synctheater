@@ -34,12 +34,12 @@ export function QuickJoinCard() {
   };
 
   return (
-    <div className="glass-panel p-6 rounded-2xl border border-white/10">
-      <div className="flex items-center gap-2.5 text-sm font-semibold text-white mb-2">
-        <KeyRound className="w-4 h-4 text-amber-400" />
+    <div id="join" className="cinema-card p-6 border border-[#353535] relative">
+      <div className="flex items-center gap-2.5 text-sm font-bold text-[#FFFFFF] mb-2">
+        <KeyRound className="w-4 h-4 text-[#D6B56D]" />
         Join With Invitation Link
       </div>
-      <p className="text-xs text-gray-400 mb-4">
+      <p className="text-xs text-[#B9B9B9] mb-4">
         Paste an invitation URL or room link you received to join directly.
       </p>
       <form onSubmit={handleJoinByCode} className="flex gap-2">
@@ -48,13 +48,13 @@ export function QuickJoinCard() {
           value={joinCode}
           onChange={(e) => setJoinCode(e.target.value)}
           placeholder="e.g. https://.../room/xyz?invite=..."
-          className="flex-1 px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:border-indigo-500 outline-none"
+          className="flex-1 px-3.5 py-2.5 rounded-xl bg-[#111111] border border-[#353535] text-[#FFFFFF] placeholder-[#777777] text-sm focus:border-[#D6B56D] outline-none transition-colors"
         />
         <button
           type="submit"
-          className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+          className="px-5 py-2.5 rounded-xl btn-gold-primary text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
         >
-          Join
+          <span>Join</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </form>

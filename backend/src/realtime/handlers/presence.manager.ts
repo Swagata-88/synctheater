@@ -81,3 +81,65 @@ export async function kickUserFromRoom(roomSlug: string, targetUserId: string, r
     ioInstance.to(roomChannel).emit('NEW_CHAT_MESSAGE', sysMsg);
   }
 }
+
+export async function broadcastHostTransfer(
+  roomSlug: string,
+  newHostId: string,
+  newHostUsername: string,
+  participants: any[]
+): Promise<void> {
+  const room = await db.findRoomBySlug(roomSlug);
+  if (!room) return;
+  const roomChannel = `room:${roomSlug}`;
+
+  if (ioInstance) {
+    ioInstance.to(roomChannel).emit('HOST_TRANSFERRED', {
+      roomSlug,
+      newHostId,
+      newHostUsername,
+      participants,
+    });
+
+    const sysMsg = await db.createChatMessage({
+      roomId: room.id,
+      userId: 'system',
+      username: 'System Alert',
+      content: `👑 ${newHostUsername} is now the host of the theater.`,
+      isSystem: true,
+    });
+    ioInstance.to(roomChannel).emit('NEW_CHAT_MESSAGE', sysMsg);
+  }
+}
+
+export async function broadcastRoomClosed(
+  roomSlug: string,
+  reason = 'The host has ended this watch room.'
+): Promise<void> {
+  const room = await db.findRoomBySlug(roomSlug);
+  const roomChannel = `room:${roomSlug}`;
+
+  if (ioInstance) {
+    ioInstance.to(roomChannel).emit('ROOM_CLOSED', {
+      roomSlug,
+      reason,
+    });
+
+    const roomSockets = await ioInstance.in(roomChannel).fetchSockets();
+    for (const s of roomSockets) {
+      s.leave(roomChannel);
+      (s as any).roomId = undefined;
+      (s as any).roomSlug = undefined;
+      (s as any).activeSessionId = undefined;
+    }
+  }
+
+  if (room) {
+    const presence = activePresence.get(room.id);
+    if (presence) {
+      for (const timeout of presence.disconnectTimeouts.values()) {
+        clearTimeout(timeout);
+      }
+      activePresence.delete(room.id);
+    }
+  }
+}

@@ -3,8 +3,9 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { Navbar } from '../../components/Navbar';
+import { IrisEmblem } from '../../components/brand/Logo';
 import { apiRequest } from '../../lib/api';
-import { KeyRound, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertCircle, Mail } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -19,7 +20,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      const res = await apiRequest<{ message: string; resetToken?: string }>(
+      const res = await apiRequest<{ message: string }>(
         '/api/auth/forgot-password',
         {
           method: 'POST',
@@ -27,9 +28,8 @@ export default function ForgotPasswordPage() {
         }
       );
       setSuccess(
-        res.resetToken
-          ? `Password reset simulation token: ${res.resetToken}. You can use this token to reset your password.`
-          : 'Password reset instructions have been sent to your email.'
+        res.message ||
+          'If an account exists with this email address, password reset instructions have been sent.'
       );
     } catch (err: any) {
       setError(err.message || 'Failed to process request.');
@@ -39,72 +39,82 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#07090e] text-white">
+    <div className="min-h-screen flex flex-col bg-[#090909] text-[#FFFFFF]">
       <Navbar />
 
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          <div className="glass-panel p-8 rounded-2xl border border-white/10 shadow-2xl relative overflow-hidden">
+          <div className="cinema-card p-8 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#D6B56D] to-transparent" />
+
             <div className="text-center mb-8">
-              <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 mx-auto flex items-center justify-center text-amber-400 mb-4">
-                <KeyRound className="w-6 h-6" />
+              <div className="flex justify-center mb-4">
+                <IrisEmblem size="lg" className="drop-shadow-[0_4px_16px_rgba(214,181,109,0.25)]" />
               </div>
-              <h1 className="text-2xl font-bold tracking-tight">Reset Password</h1>
-              <p className="text-sm text-gray-400 mt-1">Enter your email to receive recovery instructions</p>
+              <h1 className="text-2xl font-extrabold tracking-tight text-[#FFFFFF]">Reset Password</h1>
+              <p className="text-xs text-[#B9B9B9] mt-1.5">Enter your email to receive recovery instructions</p>
             </div>
 
             {error && (
-              <div className="mb-6 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-sm flex items-center gap-2.5">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <div className="mb-6 p-3.5 rounded-xl bg-red-950/60 border border-red-700/50 text-red-200 text-xs flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
                 <span>{error}</span>
               </div>
             )}
 
             {success && (
-              <div className="mb-6 p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-sm flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
-                <span>{success}</span>
+              <div className="mb-6 p-4 rounded-xl bg-[#202020] border border-[#D6B56D]/40 text-xs flex flex-col gap-2.5">
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-[#D6B56D] mt-0.5" />
+                  <span className="font-medium text-[#FFFFFF] leading-relaxed">{success}</span>
+                </div>
+                <p className="text-[11px] text-[#B9B9B9] pl-6.5 leading-relaxed">
+                  Please check your inbox (and spam folder) for a secure reset link. The link is single-use and valid for 1 hour.
+                </p>
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-semibold text-[#B9B9B9] uppercase tracking-wider mb-1.5">
                   Account Email
                 </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@domain.com"
-                  className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white placeholder-gray-500 text-sm outline-none transition-colors"
-                />
+                <div className="relative">
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@domain.com"
+                    className="w-full px-4 py-3 pr-11 rounded-xl bg-[#111111] border border-[#353535] focus:border-[#D6B56D] text-[#FFFFFF] placeholder-[#777777] text-sm outline-none transition-colors"
+                  />
+                  <Mail className="absolute right-3.5 top-3.5 w-4 h-4 text-[#777777]" />
+                </div>
               </div>
 
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full mt-2 flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+                className="w-full mt-2 flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl text-sm font-bold btn-gold-primary disabled:opacity-50 transition-all cursor-pointer"
               >
                 {isLoading ? (
-                  <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span className="inline-block w-4 h-4 border-2 border-[#090909]/40 border-t-[#090909] rounded-full animate-spin" />
                 ) : (
-                  'Send Reset Link'
+                  'Send Reset Instructions'
                 )}
               </button>
             </form>
 
-            <div className="mt-8 pt-6 border-t border-white/10 flex flex-col gap-3 text-center">
+            <div className="mt-8 pt-6 border-t border-[#353535] flex flex-col gap-3 text-center">
               <Link
                 href="/reset-password"
-                className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                className="text-xs text-[#D6B56D] hover:text-[#F0D89F] font-semibold transition-colors"
               >
                 Already have a reset token? Enter it here →
               </Link>
               <Link
                 href="/login"
-                className="inline-flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 text-xs text-[#B9B9B9] hover:text-[#FFFFFF] transition-colors"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Back to Sign In

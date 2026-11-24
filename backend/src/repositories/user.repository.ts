@@ -177,6 +177,42 @@ export class UserRepository {
     }
   }
 
+  public async consumeResetTokenAndSetPassword(
+    tokenHash: string,
+    legacyToken: string,
+    passwordHash: string
+  ): Promise<User | null> {
+    const pool = this.getPool();
+    if (this.isConnected() && pool) {
+      const res = await pool.query(
+        `UPDATE users
+         SET password_hash = $1, reset_token = NULL, reset_token_expiry = NULL, updated_at = NOW()
+         WHERE (reset_token = $2 OR reset_token = $3)
+           AND reset_token_expiry > NOW()
+         RETURNING *`,
+        [passwordHash, tokenHash, legacyToken]
+      );
+      if (res.rows.length === 0) return null;
+      return this.mapUserRow(res.rows[0]);
+    }
+
+    const idx = this.inMemoryDb.users.findIndex(
+      (u) =>
+        (u.resetToken === tokenHash || u.resetToken === legacyToken) &&
+        u.resetTokenExpiry &&
+        new Date(u.resetTokenExpiry).getTime() > Date.now()
+    );
+    if (idx === -1) return null;
+
+    const user = this.inMemoryDb.users[idx];
+    user.passwordHash = passwordHash;
+    user.resetToken = null;
+    user.resetTokenExpiry = null;
+    user.updatedAt = new Date();
+    this.storage.persist(this.inMemoryDb);
+    return user;
+  }
+
   public async updateResetToken(userId: string, token: string | null, expiry: Date | null): Promise<void> {
     const pool = this.getPool();
     if (this.isConnected() && pool) {

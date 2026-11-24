@@ -48,6 +48,123 @@ export class ParticipantRepository {
     return participant;
   }
 
+  /**
+   * Atomically adds a participant and determines their role using row-level locking
+   * to guarantee only one Acting Custodian (MODERATOR) is assigned on empty-room joins.
+   */
+  public async addParticipantWithCustodianship(
+    roomId: string,
+    userId: string,
+    isOwner: boolean
+  ): Promise<RoomParticipant> {
+    const pool = this.getPool();
+    if (this.isConnected() && pool) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // 1. Lock the room row to serialize concurrent joins for this room
+        const roomRes = await client.query(
+          `SELECT * FROM rooms WHERE id = $1 FOR UPDATE`,
+          [roomId]
+        );
+        if (roomRes.rows.length === 0) {
+          throw new Error('Room not found.');
+        }
+
+        // 2. Query all current participants under the lock
+        const partsRes = await client.query(
+          `SELECT * FROM room_participants WHERE room_id = $1 FOR UPDATE`,
+          [roomId]
+        );
+        const existingParticipants = partsRes.rows;
+        const existingUserPart = existingParticipants.find((p) => p.user_id === userId);
+
+        let role: RoomRole = 'PARTICIPANT';
+        if (isOwner) {
+          role = 'OWNER';
+        } else if (existingUserPart) {
+          // Preserve role upon reconnect
+          role = existingUserPart.role as RoomRole;
+        } else {
+          // Check if any host or custodian is currently active in the room
+          const hasHostOrMod = existingParticipants.some(
+            (p) => p.role === 'OWNER' || p.role === 'MODERATOR'
+          );
+          if (!hasHostOrMod && existingParticipants.length === 0) {
+            role = 'MODERATOR';
+          } else {
+            role = 'PARTICIPANT';
+          }
+        }
+
+        const id = existingUserPart
+          ? existingUserPart.id
+          : Math.random().toString(36).substring(2) + Date.now().toString(36);
+        const joinedAt = existingUserPart ? existingUserPart.joined_at : new Date();
+
+        const insertRes = await client.query(
+          `INSERT INTO room_participants (id, room_id, user_id, role, joined_at)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (room_id, user_id) DO UPDATE SET role = EXCLUDED.role
+           RETURNING *`,
+          [id, roomId, userId, role, joinedAt]
+        );
+
+        await client.query('COMMIT');
+        const r = insertRes.rows[0];
+        return {
+          id: r.id,
+          roomId: r.room_id,
+          userId: r.user_id,
+          role: r.role as RoomRole,
+          joinedAt: new Date(r.joined_at),
+        };
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    }
+
+    // In-memory fallback
+    const existing = this.inMemoryDb.participants.find(
+      (p) => p.roomId === roomId && p.userId === userId
+    );
+    let role: RoomRole = 'PARTICIPANT';
+    if (isOwner) {
+      role = 'OWNER';
+    } else if (existing) {
+      role = existing.role;
+    } else {
+      const roomParts = this.inMemoryDb.participants.filter((p) => p.roomId === roomId);
+      const hasHostOrMod = roomParts.some((p) => p.role === 'OWNER' || p.role === 'MODERATOR');
+      if (!hasHostOrMod && roomParts.length === 0) {
+        role = 'MODERATOR';
+      } else {
+        role = 'PARTICIPANT';
+      }
+    }
+
+    if (existing) {
+      existing.role = role;
+      this.storage.persist(this.inMemoryDb);
+      return existing;
+    }
+
+    const participant: RoomParticipant = {
+      id: Math.random().toString(36).substring(2) + Date.now().toString(36),
+      roomId,
+      userId,
+      role,
+      joinedAt: new Date(),
+    };
+    this.inMemoryDb.participants.push(participant);
+    this.storage.persist(this.inMemoryDb);
+    return participant;
+  }
+
   public async removeParticipant(roomId: string, userId: string): Promise<boolean> {
     const pool = this.getPool();
     if (this.isConnected() && pool) {

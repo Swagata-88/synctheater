@@ -1,13 +1,13 @@
 import { Server } from 'socket.io';
 import { authService } from '../modules/auth/auth.service';
 import { AuthenticatedSocket } from './types';
-import { setIoInstance, kickUserFromRoom } from './handlers/presence.manager';
+import { setIoInstance, kickUserFromRoom, broadcastHostTransfer, broadcastRoomClosed } from './handlers/presence.manager';
 import { registerRoomHandlers } from './handlers/room.handler';
 import { registerPlaybackHandlers } from './handlers/playback.handler';
 import { registerEmergencyHandlers } from './handlers/emergency.handler';
 import { registerChatHandlers } from './handlers/chat.handler';
 
-export { kickUserFromRoom };
+export { kickUserFromRoom, broadcastHostTransfer, broadcastRoomClosed };
 
 export function registerSocketGateway(io: Server) {
   setIoInstance(io);

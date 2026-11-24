@@ -21,6 +21,13 @@ export function registerRoomHandlers(io: Server, socket: AuthenticatedSocket) {
       return socket.emit('ERROR', { message: 'Watch room not found.', code: 'NOT_FOUND' });
     }
 
+    if (room.status === 'CLOSED') {
+      return socket.emit('ERROR', {
+        message: 'This watch room has been closed by the host.',
+        code: 'ROOM_CLOSED',
+      });
+    }
+
     const userId = socket.user.userId;
     const isOwner = room.ownerId === userId;
     const existingParticipant = await db.findParticipant(room.id, userId);
@@ -85,6 +92,7 @@ export function registerRoomHandlers(io: Server, socket: AuthenticatedSocket) {
 
     socket.roomSlug = roomSlug;
     socket.roomId = room.id;
+    socket.activeSessionId = room.activeSessionId || undefined;
     const roomChannel = `room:${roomSlug}`;
 
     await socket.join(roomChannel);
@@ -108,8 +116,18 @@ export function registerRoomHandlers(io: Server, socket: AuthenticatedSocket) {
     }
     userSet.add(socket.id);
 
-    // Ensure participant record exists
-    await db.addParticipant(room.id, userId, isOwner ? 'OWNER' : 'PARTICIPANT');
+    // Ensure participant record exists with atomic Custodianship & Recovery policy
+    await db.addParticipantWithCustodianship(room.id, userId, isOwner);
+
+    // Record attendance interval in historical session
+    if (room.activeSessionId) {
+      await db.recordAttendanceJoin({
+        sessionId: room.activeSessionId,
+        userId,
+        displayName: socket.user.username,
+        isOriginalHost: isOwner,
+      });
+    }
 
     // Authoritative state snapshot
     const state = await stateManager.getOrCreateRoomState(room.id, roomSlug);
@@ -170,6 +188,7 @@ export function registerRoomHandlers(io: Server, socket: AuthenticatedSocket) {
   socket.on('LEAVE_ROOM', async () => {
     const roomId = socket.roomId;
     const roomSlug = socket.roomSlug;
+    const activeSessionId = socket.activeSessionId;
     if (!roomId || !roomSlug) return;
 
     await socket.leave(`room:${roomSlug}`);
@@ -186,6 +205,10 @@ export function registerRoomHandlers(io: Server, socket: AuthenticatedSocket) {
           if (pendingTimeout) {
             clearTimeout(pendingTimeout);
             presence.disconnectTimeouts.delete(userId);
+          }
+
+          if (activeSessionId) {
+            await db.recordAttendanceLeave(activeSessionId, userId);
           }
 
           await db.removeParticipant(roomId, userId);
@@ -214,6 +237,7 @@ export function registerRoomHandlers(io: Server, socket: AuthenticatedSocket) {
     }
     socket.roomId = undefined;
     socket.roomSlug = undefined;
+    socket.activeSessionId = undefined;
   });
 
   // 4. KICK_USER
@@ -235,6 +259,7 @@ export function registerRoomHandlers(io: Server, socket: AuthenticatedSocket) {
     console.log(`[Socket] Disconnected: ${socket.id} (User: ${socket.user?.username || 'Guest'})`);
     const roomId = socket.roomId;
     const roomSlug = socket.roomSlug;
+    const activeSessionId = socket.activeSessionId;
     if (!roomId || !roomSlug) return;
 
     const presence = activePresence.get(roomId);
@@ -251,6 +276,10 @@ export function registerRoomHandlers(io: Server, socket: AuthenticatedSocket) {
           const timeout = setTimeout(async () => {
             presence.userSockets.delete(userId);
             presence.disconnectTimeouts.delete(userId);
+
+            if (activeSessionId) {
+              await db.recordAttendanceLeave(activeSessionId, userId);
+            }
 
             await db.removeParticipant(roomId, userId);
             const updatedParticipants = await db.listParticipants(roomId);

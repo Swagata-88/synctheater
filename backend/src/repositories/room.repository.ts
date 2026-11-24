@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { Room, RoomPrivacy, VideoProviderType } from '../database/types';
+import { Room, RoomPrivacy, VideoProviderType, RoomStatus } from '../database/types';
 import { InMemoryDbState } from './types';
 import { FallbackStorage } from './fallback.storage';
 
@@ -21,6 +21,8 @@ export class RoomRepository {
     currentVideoId?: string;
     currentVideoUrl?: string;
     currentProvider?: VideoProviderType;
+    status?: RoomStatus;
+    activeSessionId?: string | null;
   }): Promise<Room> {
     const slug =
       data.name
@@ -43,6 +45,8 @@ export class RoomRepository {
       currentVideoUrl: data.currentVideoUrl || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       currentProvider: data.currentProvider || 'YOUTUBE',
       isEmergencyPaused: false,
+      status: data.status || 'ACTIVE',
+      activeSessionId: data.activeSessionId || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -50,8 +54,8 @@ export class RoomRepository {
     const pool = this.getPool();
     if (this.isConnected() && pool) {
       await pool.query(
-        `INSERT INTO rooms (id, slug, name, description, privacy, password_hash, max_capacity, owner_id, current_video_id, current_video_url, current_provider, is_emergency_paused, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+        `INSERT INTO rooms (id, slug, name, description, privacy, password_hash, max_capacity, owner_id, current_video_id, current_video_url, current_provider, is_emergency_paused, status, active_session_id, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
         [
           room.id,
           room.slug,
@@ -65,6 +69,8 @@ export class RoomRepository {
           room.currentVideoUrl,
           room.currentProvider,
           room.isEmergencyPaused,
+          room.status,
+          room.activeSessionId,
           room.createdAt,
           room.updatedAt,
         ]
@@ -295,6 +301,53 @@ export class RoomRepository {
     return candidateIds.length;
   }
 
+  public async updateRoomStatus(roomId: string, status: RoomStatus): Promise<void> {
+    const pool = this.getPool();
+    if (this.isConnected() && pool) {
+      await pool.query(
+        `UPDATE rooms SET status = $1, updated_at = NOW() WHERE id = $2`,
+        [status, roomId]
+      );
+      return;
+    }
+    const idx = this.inMemoryDb.rooms.findIndex((r) => r.id === roomId);
+    if (idx !== -1) {
+      this.inMemoryDb.rooms[idx].status = status;
+      this.inMemoryDb.rooms[idx].updatedAt = new Date();
+      this.storage.persist(this.inMemoryDb);
+    }
+  }
+
+  public async updateRoomActiveSession(roomId: string, activeSessionId: string | null): Promise<void> {
+    const pool = this.getPool();
+    if (this.isConnected() && pool) {
+      await pool.query(
+        `UPDATE rooms SET active_session_id = $1, updated_at = NOW() WHERE id = $2`,
+        [activeSessionId, roomId]
+      );
+      return;
+    }
+    const idx = this.inMemoryDb.rooms.findIndex((r) => r.id === roomId);
+    if (idx !== -1) {
+      this.inMemoryDb.rooms[idx].activeSessionId = activeSessionId;
+      this.inMemoryDb.rooms[idx].updatedAt = new Date();
+      this.storage.persist(this.inMemoryDb);
+    }
+  }
+
+  public async findActiveRoomBySlug(slug: string): Promise<Room | null> {
+    const pool = this.getPool();
+    if (this.isConnected() && pool) {
+      const res = await pool.query(
+        `SELECT * FROM rooms WHERE slug = $1 AND status = 'ACTIVE' LIMIT 1`,
+        [slug]
+      );
+      if (res.rows.length === 0) return null;
+      return this.mapRoomRow(res.rows[0]);
+    }
+    return this.inMemoryDb.rooms.find((r) => r.slug === slug && (r.status === 'ACTIVE' || !r.status)) || null;
+  }
+
   public mapRoomRow(r: any): Room {
     return {
       id: r.id,
@@ -309,6 +362,8 @@ export class RoomRepository {
       currentVideoUrl: r.current_video_url,
       currentProvider: r.current_provider,
       isEmergencyPaused: r.is_emergency_paused,
+      status: (r.status as RoomStatus) || 'ACTIVE',
+      activeSessionId: r.active_session_id || null,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };

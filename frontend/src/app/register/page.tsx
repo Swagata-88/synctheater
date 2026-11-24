@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { Navbar } from '../../components/Navbar';
-import { Film, UserPlus, AlertCircle } from 'lucide-react';
+import { IrisEmblem } from '../../components/brand/Logo';
+import { UserPlus, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { sanitizeReturnUrl } from '../../lib/api';
 
 function RegisterForm() {
@@ -18,6 +19,7 @@ function RegisterForm() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -30,8 +32,8 @@ function RegisterForm() {
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
 
@@ -56,29 +58,30 @@ function RegisterForm() {
 
   return (
     <div className="w-full max-w-md">
-      <div className="glass-panel p-8 rounded-2xl border border-white/10 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-indigo-500 to-amber-400" />
+      <div className="cinema-card p-8 shadow-2xl relative overflow-hidden">
+        {/* Subtle top gold accent line */}
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#D6B56D] to-transparent" />
 
         <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-emerald-600/20 border border-emerald-500/40 mx-auto flex items-center justify-center text-emerald-400 mb-4">
-            <Film className="w-6 h-6" />
+          <div className="flex justify-center mb-4">
+            <IrisEmblem size="lg" className="drop-shadow-[0_4px_16px_rgba(214,181,109,0.25)]" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Create Account</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {returnUrl ? 'Create an account to join this private watch room' : 'Join the synchronized cinema community'}
+          <h1 className="text-2xl font-extrabold tracking-tight text-[#FFFFFF]">Create Account</h1>
+          <p className="text-xs text-[#B9B9B9] mt-1.5">
+            {returnUrl ? 'Create an account to join this private theater' : 'Join the private synchronized cinema platform'}
           </p>
         </div>
 
         {error && (
-          <div className="mb-6 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-sm flex items-center gap-2.5">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+          <div className="mb-6 p-3.5 rounded-xl bg-red-950/60 border border-red-700/50 text-red-200 text-xs flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
             <span>{error}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-[#B9B9B9] uppercase tracking-wider mb-1.5">
               Email Address
             </label>
             <input
@@ -87,12 +90,12 @@ function RegisterForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="alex@domain.com"
-              className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white placeholder-gray-500 text-sm outline-none transition-colors"
+              className="w-full px-4 py-3 rounded-xl bg-[#111111] border border-[#353535] focus:border-[#D6B56D] text-[#FFFFFF] placeholder-[#777777] text-sm outline-none transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-[#B9B9B9] uppercase tracking-wider mb-1.5">
               Choose Username
             </label>
             <input
@@ -101,45 +104,55 @@ function RegisterForm() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="CinemaFan42"
-              className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white placeholder-gray-500 text-sm outline-none transition-colors"
+              className="w-full px-4 py-3 rounded-xl bg-[#111111] border border-[#353535] focus:border-[#D6B56D] text-[#FFFFFF] placeholder-[#777777] text-sm outline-none transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-[#B9B9B9] uppercase tracking-wider mb-1.5">
               Password
             </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••••••"
-              className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white placeholder-gray-500 text-sm outline-none transition-colors"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                className="w-full px-4 py-3 pr-11 rounded-xl bg-[#111111] border border-[#353535] focus:border-[#D6B56D] text-[#FFFFFF] placeholder-[#777777] text-sm outline-none transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3.5 top-3.5 text-[#777777] hover:text-[#FFFFFF] transition-colors cursor-pointer"
+                aria-label="Toggle password visibility"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-[#B9B9B9] uppercase tracking-wider mb-1.5">
               Confirm Password
             </label>
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="••••••••••••"
-              className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white placeholder-gray-500 text-sm outline-none transition-colors"
+              className="w-full px-4 py-3 rounded-xl bg-[#111111] border border-[#353535] focus:border-[#D6B56D] text-[#FFFFFF] placeholder-[#777777] text-sm outline-none transition-colors"
             />
           </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full mt-2 flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 disabled:opacity-50 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+            className="w-full mt-2 flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl text-sm font-bold btn-gold-primary disabled:opacity-50 transition-all cursor-pointer"
           >
             {isLoading ? (
-              <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span className="inline-block w-4 h-4 border-2 border-[#090909]/40 border-t-[#090909] rounded-full animate-spin" />
             ) : (
               <>
                 <UserPlus className="w-4 h-4" />
@@ -149,9 +162,9 @@ function RegisterForm() {
           </button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-white/10 text-center text-sm text-gray-400">
+        <div className="mt-8 pt-6 border-t border-[#353535] text-center text-xs text-[#B9B9B9]">
           Already have an account?{' '}
-          <Link href={loginHref} className="text-indigo-400 hover:text-indigo-300 font-medium">
+          <Link href={loginHref} className="text-[#D6B56D] hover:text-[#F0D89F] font-semibold transition-colors">
             Sign in here
           </Link>
         </div>
@@ -162,10 +175,10 @@ function RegisterForm() {
 
 export default function RegisterPage() {
   return (
-    <div className="min-h-screen flex flex-col bg-[#07090e] text-white">
+    <div className="min-h-screen flex flex-col bg-[#090909] text-[#FFFFFF]">
       <Navbar />
       <div className="flex-1 flex items-center justify-center px-4 py-12">
-        <Suspense fallback={<div className="text-gray-400 text-sm">Loading registration form...</div>}>
+        <Suspense fallback={<div className="text-[#B9B9B9] text-sm">Loading registration...</div>}>
           <RegisterForm />
         </Suspense>
       </div>

@@ -11,27 +11,36 @@ module.exports = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        // Official SYNCTHEATER Brand Identity: Metallic Champagne Gold x Midnight Black
         theater: {
-          dark: "#0b0d13",
-          card: "#12151f",
-          border: "#1f2433",
-          accent: "#6366f1",
-          gold: "#eab308",
-          emergency: "#ef4444"
+          bg: "#090909",          // Main background
+          secondary: "#111111",   // Secondary background
+          card: "#171717",        // Card background
+          surface: "#202020",     // Elevated surfaces
+          gold: "#D6B56D",        // Primary champagne gold
+          goldLight: "#F0D89F",   // Gold highlight
+          goldDark: "#94743D",    // Antique gold
+          border: "#353535",      // Borders
+          borderSubtle: "#242424",
+          text: "#FFFFFF",        // Main text
+          textMuted: "#B9B9B9",   // Secondary text
+          textDim: "#777777",     // Muted text
+          player: "#000000",      // Video player background
+          emergency: "#ef4444",   // Emergency Pause red
         }
       },
       fontFamily: {
-        sans: ["var(--font-geist-sans)", "sans-serif"],
+        sans: ["var(--font-geist-sans)", "system-ui", "-apple-system", "sans-serif"],
         mono: ["var(--font-geist-mono)", "monospace"],
       },
       animation: {
         "pulse-fast": "pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-        "glow": "glow 2s ease-in-out infinite alternate",
+        "gold-shimmer": "gold-shimmer 3s ease-in-out infinite alternate",
       },
       keyframes: {
-        glow: {
-          "0%": { boxShadow: "0 0 15px rgba(99, 102, 241, 0.3)" },
-          "100%": { boxShadow: "0 0 30px rgba(99, 102, 241, 0.7)" },
+        "gold-shimmer": {
+          "0%": { opacity: "0.85" },
+          "100%": { opacity: "1" },
         }
       }
     },

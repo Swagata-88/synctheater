@@ -106,9 +106,58 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
       added_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    -- Phase 15: Room Lifecycle & Persistent Watch History
+    ALTER TABLE rooms ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'ACTIVE';
+    ALTER TABLE rooms ADD COLUMN IF NOT EXISTS active_session_id VARCHAR(64);
+
+    -- Persistent Watch Party Sessions (Independent of operational room deletion)
+    CREATE TABLE IF NOT EXISTS room_sessions (
+      id VARCHAR(64) PRIMARY KEY,
+      room_id VARCHAR(64) NOT NULL,
+      room_slug VARCHAR(120) NOT NULL,
+      room_name VARCHAR(100) NOT NULL,
+      original_host_id VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL,
+      original_host_username VARCHAR(100) NOT NULL,
+      final_host_id VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL,
+      final_host_username VARCHAR(100) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      started_at TIMESTAMPTZ,
+      ended_at TIMESTAMPTZ,
+      total_duration_seconds INT DEFAULT 0,
+      status VARCHAR(20) DEFAULT 'ACTIVE',
+      closure_reason VARCHAR(50)
+    );
+
+    -- Participant Attendance Intervals (Tracks multiple join/leave cycles per participant)
+    CREATE TABLE IF NOT EXISTS participant_attendance (
+      id VARCHAR(64) PRIMARY KEY,
+      session_id VARCHAR(64) NOT NULL REFERENCES room_sessions(id) ON DELETE CASCADE,
+      user_id VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL,
+      display_name VARCHAR(100) NOT NULL,
+      joined_at TIMESTAMPTZ NOT NULL,
+      left_at TIMESTAMPTZ,
+      duration_seconds INT DEFAULT 0,
+      is_original_host BOOLEAN DEFAULT FALSE,
+      became_host BOOLEAN DEFAULT FALSE
+    );
+
+    -- Host Transfer Audit History
+    CREATE TABLE IF NOT EXISTS host_transfer_history (
+      id VARCHAR(64) PRIMARY KEY,
+      session_id VARCHAR(64) NOT NULL REFERENCES room_sessions(id) ON DELETE CASCADE,
+      previous_host_id VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL,
+      previous_host_username VARCHAR(100) NOT NULL,
+      new_host_id VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL,
+      new_host_username VARCHAR(100) NOT NULL,
+      transferred_at TIMESTAMPTZ DEFAULT NOW(),
+      reason VARCHAR(100) DEFAULT 'VOLUNTARY_TRANSFER',
+      transfer_type VARCHAR(30) DEFAULT 'VOLUNTARY'
+    );
+
     -- Production Performance & Query Optimization Indexes
     CREATE INDEX IF NOT EXISTS idx_rooms_slug ON rooms(slug);
     CREATE INDEX IF NOT EXISTS idx_rooms_owner_id ON rooms(owner_id);
+    CREATE INDEX IF NOT EXISTS idx_rooms_status ON rooms(status);
     CREATE INDEX IF NOT EXISTS idx_room_participants_room_id ON room_participants(room_id);
     CREATE INDEX IF NOT EXISTS idx_room_participants_user_id ON room_participants(user_id);
     CREATE INDEX IF NOT EXISTS idx_room_invitations_token ON room_invitations(token);
@@ -117,6 +166,51 @@ export async function runPostgresMigrations(pool: Pool): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
     CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token);
+
+    -- History Performance & Partial Unique Constraints
+    CREATE INDEX IF NOT EXISTS idx_room_sessions_slug ON room_sessions(room_slug);
+    CREATE INDEX IF NOT EXISTS idx_room_sessions_host ON room_sessions(original_host_id, final_host_id);
+    CREATE INDEX IF NOT EXISTS idx_room_sessions_status ON room_sessions(status);
+    CREATE INDEX IF NOT EXISTS idx_participant_attendance_user ON participant_attendance(user_id, session_id);
+    CREATE INDEX IF NOT EXISTS idx_participant_attendance_session ON participant_attendance(session_id);
+    CREATE INDEX IF NOT EXISTS idx_host_transfers_session ON host_transfer_history(session_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_open_attendance ON participant_attendance(session_id, user_id) WHERE left_at IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_open_attendance_guest ON participant_attendance(session_id, display_name) WHERE user_id IS NULL AND left_at IS NULL;
+
+    -- Migration Backfill for pre-existing active rooms without an activeSessionId
+    DO $$
+    DECLARE
+      r RECORD;
+      sess_id VARCHAR(64);
+      host_uname VARCHAR(100);
+    BEGIN
+      FOR r IN SELECT id, slug, name, owner_id, created_at FROM rooms WHERE active_session_id IS NULL AND (status IS NULL OR status = 'ACTIVE') LOOP
+        sess_id := 'sess_' || substr(md5(random()::text || clock_timestamp()::text), 1, 24);
+        SELECT username INTO host_uname FROM users WHERE id = r.owner_id;
+        IF host_uname IS NULL THEN
+          host_uname := 'Host';
+        END IF;
+
+        INSERT INTO room_sessions (id, room_id, room_slug, room_name, original_host_id, original_host_username, final_host_id, final_host_username, created_at, started_at, status)
+        VALUES (sess_id, r.id, r.slug, r.name, r.owner_id, host_uname, r.owner_id, host_uname, r.created_at, r.created_at, 'ACTIVE')
+        ON CONFLICT (id) DO NOTHING;
+
+        UPDATE rooms SET active_session_id = sess_id, status = 'ACTIVE' WHERE id = r.id;
+
+        INSERT INTO participant_attendance (id, session_id, user_id, display_name, joined_at, is_original_host, became_host)
+        SELECT 'att_' || substr(md5(random()::text || clock_timestamp()::text || rp.user_id), 1, 24),
+               sess_id,
+               rp.user_id,
+               COALESCE(u.username, 'Participant'),
+               rp.joined_at,
+               (rp.user_id = r.owner_id),
+               (rp.role = 'OWNER' AND rp.user_id <> r.owner_id)
+        FROM room_participants rp
+        LEFT JOIN users u ON u.id = rp.user_id
+        WHERE rp.room_id = r.id
+        ON CONFLICT DO NOTHING;
+      END LOOP;
+    END $$;
   `;
 
   try {

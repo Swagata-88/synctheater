@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldAlert } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { Navbar } from '../Navbar';
 
 interface RoomAccessDeniedProps {
@@ -26,34 +26,34 @@ export function RoomAccessDenied({ slug, title, message }: RoomAccessDeniedProps
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#07090e] text-white">
+    <div className="min-h-screen flex flex-col bg-[#090909] text-[#FFFFFF]">
       <Navbar />
       <div className="flex-1 flex items-center justify-center p-4">
-        <div className="glass-panel w-full max-w-md p-8 rounded-2xl border border-white/10 text-center shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-500" />
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 mx-auto flex items-center justify-center mb-5">
-            <ShieldAlert className="w-7 h-7" />
+        <div className="cinema-card w-full max-w-md p-8 text-center shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#D6B56D] to-transparent" />
+          <div className="w-14 h-14 rounded-2xl bg-[#202020] border border-[#353535] text-[#D6B56D] mx-auto flex items-center justify-center mb-5">
+            <Lock className="w-7 h-7 text-[#D6B56D]" />
           </div>
 
-          <h2 className="text-xl font-extrabold text-white mb-2">
+          <h2 className="text-xl font-extrabold text-[#FFFFFF] mb-2">
             {title || 'Private Theater'}
           </h2>
 
-          <p className="text-sm text-gray-300 leading-relaxed mb-6">
+          <p className="text-sm text-[#B9B9B9] leading-relaxed mb-6">
             {message || 'This watch party is private. A valid invitation link is required to join.'}
           </p>
 
           <div className="space-y-3">
             <button
               onClick={handleEnterCode}
-              className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all cursor-pointer"
+              className="w-full py-3 px-4 rounded-xl text-sm font-bold btn-gold-primary transition-all cursor-pointer"
             >
               Enter Invitation Code
             </button>
 
             <button
               onClick={() => router.push('/dashboard')}
-              className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-gray-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold btn-gold-secondary transition-colors cursor-pointer"
             >
               Return to Dashboard
             </button>

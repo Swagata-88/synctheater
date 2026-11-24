@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Tv, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Tv, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { apiRequest } from '../../lib/api';
 
 interface ChangeVideoModalProps {
@@ -51,24 +51,27 @@ export function ChangeVideoModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="glass-panel w-full max-w-lg rounded-2xl border border-white/15 p-6 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95">
-        <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
-          <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <Tv className="w-4 h-4 text-indigo-400" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#000000]/85 backdrop-blur-md">
+      <div className="cinema-card w-full max-w-lg rounded-2xl border border-[#353535] p-6 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#D6B56D] to-transparent" />
+
+        <div className="flex items-center justify-between pb-3 border-b border-[#353535] mb-4">
+          <h3 className="text-base font-bold text-[#FFFFFF] flex items-center gap-2">
+            <Tv className="w-4 h-4 text-[#D6B56D]" />
             Change Theater Video
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white text-sm cursor-pointer"
+            className="p-1 rounded-lg text-[#777777] hover:text-[#FFFFFF] hover:bg-[#202020] transition-colors cursor-pointer"
+            aria-label="Close dialog"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         <form onSubmit={handleConfirmChangeVideo} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-[#B9B9B9] uppercase tracking-wider mb-1.5">
               New Video or Stream URL
             </label>
             <input
@@ -77,13 +80,13 @@ export function ChangeVideoModal({
               value={newVideoUrl}
               onChange={(e) => handleUrlInput(e.target.value)}
               placeholder="Paste YouTube, Google Drive, MP4, or HLS .m3u8 link"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:border-indigo-500 outline-none"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#111111] border border-[#353535] text-[#FFFFFF] placeholder-[#777777] text-sm focus:border-[#D6B56D] outline-none transition-colors"
             />
           </div>
 
           {isResolving && (
-            <p className="text-xs text-indigo-400 flex items-center gap-1.5">
-              <span className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs text-[#D6B56D] flex items-center gap-1.5">
+              <span className="w-3 h-3 border-2 border-[#D6B56D] border-t-transparent rounded-full animate-spin" />
               Analyzing provider...
             </p>
           )}
@@ -92,14 +95,14 @@ export function ChangeVideoModal({
             <div
               className={`p-3 rounded-xl text-xs flex items-center gap-2.5 ${
                 resolvedPreview.isSupported
-                  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
-                  : 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
+                  ? 'bg-emerald-950/60 border border-emerald-700/50 text-emerald-200'
+                  : 'bg-red-950/60 border border-red-700/50 text-red-200'
               }`}
             >
               {resolvedPreview.isSupported ? (
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               ) : (
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
               )}
               <div>
                 <p className="font-bold">
@@ -112,18 +115,18 @@ export function ChangeVideoModal({
             </div>
           )}
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#353535]">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs text-gray-400 hover:text-white hover:bg-white/5 cursor-pointer"
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-[#B9B9B9] hover:text-[#FFFFFF] hover:bg-[#202020] transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!resolvedPreview?.isSupported}
-              className="px-5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 transition-colors cursor-pointer"
+              className="px-5 py-2 rounded-xl text-xs font-bold btn-gold-primary disabled:opacity-40 transition-all cursor-pointer"
             >
               Switch Video
             </button>

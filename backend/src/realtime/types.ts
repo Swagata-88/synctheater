@@ -5,6 +5,7 @@ export interface AuthenticatedSocket extends Socket {
   user?: AuthTokenPayload;
   roomSlug?: string;
   roomId?: string;
+  activeSessionId?: string;
 }
 
 export interface RoomPresence {

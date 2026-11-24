@@ -1,8 +1,10 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { db } from '../../database';
-import { config } from '../../config';
+import { config, maskEmail } from '../../config';
 import { User } from '../../database/types';
+import { emailService } from './email.service';
 
 export interface AuthTokenPayload {
   userId: string;
@@ -26,6 +28,13 @@ export class AuthService {
     username: string;
     password: string;
   }): Promise<{ user: Omit<User, 'passwordHash'>; token: string }> {
+    if (!data.password || data.password.length < 8) {
+      throw new Error('Password must be at least 8 characters long.');
+    }
+    if (data.password.length > 128) {
+      throw new Error('Password cannot exceed 128 characters.');
+    }
+
     const existingEmail = await db.findUserByEmail(data.email);
     if (existingEmail) {
       throw new Error('An account with this email already exists.');
@@ -99,48 +108,73 @@ export class AuthService {
     });
   }
 
-  public async requestPasswordReset(email: string): Promise<{ resetToken: string }> {
-    const user = await db.findUserByEmail(email);
+  public async requestPasswordReset(
+    email: string
+  ): Promise<{ success: boolean; rawToken?: string; resetToken?: string }> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await db.findUserByEmail(normalizedEmail);
+
     if (!user) {
-      // Don't leak existence, return success anyway
-      return { resetToken: 'simulation-token-dispatched' };
+      // Timing attack mitigation: simulate token generation & hashing so response times are indistinguishable
+      crypto.createHash('sha256').update(crypto.randomBytes(32)).digest('hex');
+      console.log(`[AuthService] Password reset requested for non-existent email (generic response dispatched)`);
+      return { success: true };
     }
 
-    const resetToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
-    const resetTokenExpiry = new Date(Date.now() + 3600 * 1000); // 1 hour
+    // Generate cryptographically secure 32-byte hex token (64 hex characters)
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    // Store only the SHA-256 cryptographic hash in the database
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const resetTokenExpiry = new Date(Date.now() + 3600 * 1000); // 1-hour secure expiration
 
     await db.updateUser(user.id, {
-      resetToken,
+      resetToken: tokenHash,
       resetTokenExpiry,
     });
 
-    console.log(`[AuthService] Password reset requested for ${email}`);
-    return { resetToken };
+    const resetUrl = `${config.clientUrl}/reset-password?token=${rawToken}`;
+
+    // Dispatches email through configured SMTP server
+    await emailService.sendPasswordResetEmail({
+      to: user.email,
+      username: user.username,
+      resetUrl,
+    });
+
+    console.log(`[AuthService] Password reset token generated and dispatched for user ${user.id}`);
+    // rawToken/resetToken is returned only for internal service callers (such as test runners);
+    // the HTTP controller strictly strips this and never exposes it to API clients.
+    return { success: true, rawToken, resetToken: rawToken };
   }
 
   public async resetPassword(token: string, newPassword: string): Promise<boolean> {
-    if (!token || !token.trim()) {
+    if (!token || typeof token !== 'string' || !token.trim()) {
       throw new Error('Invalid or expired password reset token.');
     }
 
-    const user = await db.findUserByResetToken(token);
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error('Password must be at least 8 characters long.');
+    }
+    if (newPassword.length > 128) {
+      throw new Error('Password cannot exceed 128 characters.');
+    }
+
+    const trimmedToken = token.trim();
+    // Compute SHA-256 hash of the presented token
+    const tokenHash = crypto.createHash('sha256').update(trimmedToken).digest('hex');
+
+    // Hash the new password with bcrypt
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    // Atomically check token validity, expiration, update password, and clear reset token in one single DB write.
+    // This strictly eliminates race conditions: two simultaneous requests with the same token can never both succeed.
+    const user = await db.consumeResetTokenAndSetPassword(tokenHash, trimmedToken, passwordHash);
     if (!user) {
       throw new Error('Invalid or expired password reset token.');
     }
 
-    if (user.resetTokenExpiry && new Date(user.resetTokenExpiry) < new Date()) {
-      throw new Error('This password reset link has expired.');
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(newPassword, salt);
-
-    await db.updateUser(user.id, {
-      passwordHash,
-      resetToken: null,
-      resetTokenExpiry: null,
-    });
-
+    console.log(`[AuthService] Password reset successfully for user ${user.id} (${maskEmail(user.email)})`);
     return true;
   }
 }

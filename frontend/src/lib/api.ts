@@ -166,3 +166,120 @@ export async function validateRoomInvite(roomSlug: string, token: string) {
     body: JSON.stringify({ token }),
   });
 }
+
+// Room Lifecycle & Host Management API helpers
+export async function leaveRoom(roomSlug: string) {
+  return apiRequest<{ success: boolean; message: string }>(
+    `/api/rooms/${encodeURIComponent(roomSlug)}/leave`,
+    {
+      method: 'POST',
+    }
+  );
+}
+
+export async function transferHost(roomSlug: string, newHostId: string) {
+  return apiRequest<{
+    success: boolean;
+    message: string;
+    newHostId: string;
+    newHostUsername: string;
+    previousHostId: string;
+  }>(`/api/rooms/${encodeURIComponent(roomSlug)}/transfer-host`, {
+    method: 'POST',
+    body: JSON.stringify({ newHostId }),
+  });
+}
+
+export async function endRoom(roomSlug: string) {
+  return apiRequest<{
+    success: boolean;
+    message: string;
+    room: any;
+  }>(`/api/rooms/${encodeURIComponent(roomSlug)}/end`, {
+    method: 'POST',
+  });
+}
+
+// Watch History API helpers
+export interface WatchHistoryItem {
+  id: string;
+  roomId: string;
+  roomSlug: string;
+  roomName: string;
+  originalHostId: string | null;
+  originalHostUsername: string;
+  finalHostId: string | null;
+  finalHostUsername: string;
+  createdAt: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  totalDurationSeconds: number;
+  status: 'ACTIVE' | 'CLOSING' | 'CLOSED';
+  closureReason: string | null;
+  userRole: 'ORIGINAL_HOST' | 'SUCCESSOR_HOST' | 'PARTICIPANT';
+  userParticipationDuration: number;
+  participantCount: number;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  sessionId: string;
+  userId: string | null;
+  displayName: string;
+  joinedAt: string;
+  leftAt: string | null;
+  durationSeconds: number;
+  isOriginalHost: boolean;
+  becameHost: boolean;
+}
+
+export interface HostTransferRecord {
+  id: string;
+  sessionId: string;
+  previousHostId: string | null;
+  previousHostUsername: string;
+  newHostId: string | null;
+  newHostUsername: string;
+  transferredAt: string;
+  reason: string;
+  transferType: string;
+}
+
+export interface SessionDetailsResponse {
+  success: boolean;
+  session: {
+    id: string;
+    roomId: string;
+    roomSlug: string;
+    roomName: string;
+    originalHostId: string | null;
+    originalHostUsername: string;
+    finalHostId: string | null;
+    finalHostUsername: string;
+    createdAt: string;
+    startedAt: string | null;
+    endedAt: string | null;
+    totalDurationSeconds: number;
+    status: 'ACTIVE' | 'CLOSING' | 'CLOSED';
+    closureReason: string | null;
+  };
+  attendance: AttendanceRecord[];
+  transfers: HostTransferRecord[];
+}
+
+export async function fetchMyWatchHistory(page = 1, limit = 10) {
+  return apiRequest<{
+    success: boolean;
+    history: WatchHistoryItem[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }>(`/api/history/my?page=${page}&limit=${limit}`);
+}
+
+export async function fetchSessionDetails(sessionId: string) {
+  return apiRequest<SessionDetailsResponse>(`/api/history/${encodeURIComponent(sessionId)}`);
+}

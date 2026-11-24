@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { Navbar } from '../../components/Navbar';
 import { apiRequest } from '../../lib/api';
-import { User, CheckCircle2, AlertCircle, Save, Sparkles } from 'lucide-react';
+import { User, CheckCircle2, AlertCircle, Save } from 'lucide-react';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -29,7 +29,7 @@ export default function ProfilePage() {
       setAvatarUrl(profile.avatarUrl || '');
       setBio(profile.bio || '');
     }
-  }, [user, profile, isLoading]);
+  }, [user, profile, isLoading, router]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,30 +66,32 @@ export default function ProfilePage() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#07090e] text-white">
+    <div className="min-h-screen flex flex-col bg-[#090909] text-[#FFFFFF]">
       <Navbar />
 
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-12">
-        <div className="glass-panel p-8 rounded-2xl border border-white/10 shadow-2xl relative overflow-hidden">
-          <div className="flex items-center gap-3 pb-6 border-b border-white/10 mb-6">
-            <div className="w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center">
+        <div className="cinema-card p-8 border border-[#353535] shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#D6B56D] to-transparent" />
+
+          <div className="flex items-center gap-3 pb-6 border-b border-[#353535] mb-6">
+            <div className="w-12 h-12 rounded-xl bg-[#202020] border border-[#353535] text-[#D6B56D] flex items-center justify-center">
               <User className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Your Cinema Profile</h1>
-              <p className="text-xs text-gray-400 mt-0.5">Manage your identity, avatar, and bio</p>
+              <h1 className="text-2xl font-extrabold tracking-tight text-[#FFFFFF]">Your Cinema Profile</h1>
+              <p className="text-xs text-[#B9B9B9] mt-0.5">Manage your identity, avatar, and bio</p>
             </div>
           </div>
 
           {error && (
-            <div className="mb-6 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+            <div className="mb-6 p-3.5 rounded-xl bg-red-950/60 border border-red-700/50 text-red-200 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
               <span>{error}</span>
             </div>
           )}
 
           {success && (
-            <div className="mb-6 p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+            <div className="mb-6 p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-700/50 text-emerald-200 text-xs flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
               <span>{success}</span>
             </div>
@@ -98,14 +100,14 @@ export default function ProfilePage() {
           <form onSubmit={handleSave} className="space-y-6">
             {/* Avatar Preview & Selection */}
             <div>
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-semibold text-[#B9B9B9] uppercase tracking-wider mb-2">
                 Avatar Image
               </label>
               <div className="flex items-center gap-4 mb-4">
                 <img
                   src={avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.id}`}
                   alt="Avatar"
-                  className="w-16 h-16 rounded-2xl bg-indigo-950 border-2 border-indigo-500/40 object-cover shadow-lg"
+                  className="w-16 h-16 rounded-2xl bg-[#202020] border-2 border-[#D6B56D]/50 object-cover shadow-lg"
                 />
                 <div className="flex-1">
                   <input
@@ -113,9 +115,9 @@ export default function ProfilePage() {
                     value={avatarUrl}
                     onChange={(e) => setAvatarUrl(e.target.value)}
                     placeholder="https://example.com/avatar.png"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-xs placeholder-gray-500 focus:border-indigo-500 outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#111111] border border-[#353535] text-[#FFFFFF] text-xs placeholder-[#777777] focus:border-[#D6B56D] outline-none transition-colors"
                   />
-                  <p className="text-[11px] text-gray-400 mt-1">Paste image URL or pick a preset below:</p>
+                  <p className="text-[11px] text-[#777777] mt-1">Paste image URL or pick a preset below:</p>
                 </div>
               </div>
 
@@ -125,7 +127,7 @@ export default function ProfilePage() {
                     key={idx}
                     type="button"
                     onClick={() => setAvatarUrl(preset)}
-                    className="w-10 h-10 rounded-xl overflow-hidden border-2 border-white/10 hover:border-indigo-500 hover:scale-105 transition-all"
+                    className="w-10 h-10 rounded-xl overflow-hidden border-2 border-[#353535] hover:border-[#D6B56D] hover:scale-105 transition-all cursor-pointer"
                   >
                     <img src={preset} alt={`Preset ${idx}`} className="w-full h-full object-cover" />
                   </button>
@@ -135,7 +137,7 @@ export default function ProfilePage() {
 
             {/* Username */}
             <div>
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-[#B9B9B9] uppercase tracking-wider mb-1.5">
                 Display Username
               </label>
               <input
@@ -144,16 +146,16 @@ export default function ProfilePage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Unique username"
-                className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white text-sm focus:border-indigo-500 outline-none"
+                className="w-full px-4 py-3 rounded-xl bg-[#111111] border border-[#353535] text-[#FFFFFF] text-sm focus:border-[#D6B56D] outline-none transition-colors"
               />
-              <p className="text-[11px] text-gray-500 mt-1">
+              <p className="text-[11px] text-[#777777] mt-1">
                 Letters, numbers, underscores, and hyphens only (3-30 characters).
               </p>
             </div>
 
             {/* Bio */}
             <div>
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-[#B9B9B9] uppercase tracking-wider mb-1.5">
                 About You
               </label>
               <textarea
@@ -161,15 +163,15 @@ export default function ProfilePage() {
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="Tell other watch party members what you love to watch..."
-                className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white text-sm focus:border-indigo-500 outline-none resize-none"
+                className="w-full px-4 py-3 rounded-xl bg-[#111111] border border-[#353535] text-[#FFFFFF] text-sm focus:border-[#D6B56D] outline-none resize-none transition-colors"
               />
             </div>
 
-            <div className="pt-4 border-t border-white/10 flex justify-end">
+            <div className="pt-4 border-t border-[#353535] flex justify-end">
               <button
                 type="submit"
                 disabled={isSaving}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+                className="flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-bold btn-gold-primary disabled:opacity-50 transition-all cursor-pointer"
               >
                 <Save className="w-4 h-4" />
                 {isSaving ? 'Saving...' : 'Save Changes'}

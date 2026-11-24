@@ -8,11 +8,7 @@ import {
   Video,
   Share2,
   Sparkles,
-  Maximize2,
-  Volume2,
-  Settings,
   Check,
-  Copy,
 } from 'lucide-react';
 import { copyToClipboard } from '../../lib/clipboard';
 import { getAppUrl } from '../../lib/api';
@@ -81,7 +77,6 @@ export function PlaybackControls({
         setCopiedToast(true);
         setTimeout(() => setCopiedToast(false), 2500);
       } else {
-        // Automatic copy failed or unavailable on this browser/context
         setShowManualModal(true);
       }
     } catch (err) {
@@ -92,10 +87,10 @@ export function PlaybackControls({
 
   return (
     <>
-      <div className="w-full glass-panel rounded-2xl p-4 border border-white/10 shadow-2xl space-y-3">
+      <div className="w-full cinema-card p-4 border border-[#353535] shadow-2xl space-y-3">
         {/* Top: Progress Scrubbing Bar */}
         <div className="flex items-center gap-3">
-          <span className="text-xs font-mono text-gray-400 w-12 text-right">
+          <span className="text-xs font-mono text-[#B9B9B9] w-12 text-right">
             {formatTime(currentTime)}
           </span>
 
@@ -108,11 +103,11 @@ export function PlaybackControls({
               value={currentTime}
               disabled={!isOwnerOrMod}
               onChange={(e) => onSeek(Number(e.target.value))}
-              className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-indigo-500 disabled:cursor-not-allowed transition-all"
+              className="w-full h-1.5 bg-[#202020] rounded-lg appearance-none cursor-pointer accent-[#D6B56D] disabled:cursor-not-allowed transition-all"
             />
           </div>
 
-          <span className="text-xs font-mono text-gray-400 w-12">
+          <span className="text-xs font-mono text-[#B9B9B9] w-12">
             {formatTime(duration)}
           </span>
         </div>
@@ -125,7 +120,7 @@ export function PlaybackControls({
               <button
                 title={status === 'PLAYING' ? 'Pause Video' : 'Play Video'}
                 onClick={status === 'PLAYING' ? onPause : onPlay}
-                className="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 transition-transform active:scale-95"
+                className="w-10 h-10 rounded-xl btn-gold-primary flex items-center justify-center shadow-lg transition-transform active:scale-95 cursor-pointer"
               >
                 {status === 'PLAYING' ? (
                   <Pause className="w-5 h-5 fill-current" />
@@ -134,7 +129,7 @@ export function PlaybackControls({
                 )}
               </button>
             ) : (
-              <div className="text-xs text-gray-400 px-3 py-2 bg-white/5 rounded-xl border border-white/5">
+              <div className="text-xs text-[#B9B9B9] px-3 py-2 bg-[#202020] rounded-xl border border-[#353535]">
                 Synced to Host
               </div>
             )}
@@ -142,9 +137,9 @@ export function PlaybackControls({
             {isOwnerOrMod && (
               <button
                 onClick={onChangeVideoClick}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white transition-colors"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#202020] hover:bg-[#282828] text-[#FFFFFF] border border-[#353535] hover:border-[#D6B56D] transition-colors cursor-pointer"
               >
-                <Video className="w-4 h-4 text-indigo-400" />
+                <Video className="w-4 h-4 text-[#D6B56D]" />
                 Change Video
               </button>
             )}
@@ -153,14 +148,14 @@ export function PlaybackControls({
             <div className="relative">
               <button
                 onClick={() => setShowRateMenu(!showRateMenu)}
-                className="px-2.5 py-2 rounded-xl text-xs font-mono font-semibold bg-white/5 hover:bg-white/10 text-gray-300 transition-colors"
+                className="px-2.5 py-2 rounded-xl text-xs font-mono font-semibold bg-[#202020] hover:bg-[#282828] text-[#FFFFFF] border border-[#353535] transition-colors cursor-pointer"
               >
                 {playbackRate}x
               </button>
 
               {showRateMenu && (
                 <div
-                  className="absolute left-0 bottom-full mb-2 w-24 glass-dropdown rounded-xl p-1 z-30 shadow-xl"
+                  className="absolute left-0 bottom-full mb-2 w-24 cinema-dropdown rounded-xl p-1 z-30 shadow-xl"
                   onClick={() => setShowRateMenu(false)}
                 >
                   {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((rate) => (
@@ -168,7 +163,7 @@ export function PlaybackControls({
                       key={rate}
                       onClick={() => onChangeRate(rate)}
                       className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors ${
-                        playbackRate === rate ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-white/10'
+                        playbackRate === rate ? 'bg-[#D6B56D] text-[#090909] font-bold' : 'text-[#B9B9B9] hover:bg-[#202020] hover:text-[#FFFFFF]'
                       }`}
                     >
                       {rate}x
@@ -198,18 +193,18 @@ export function PlaybackControls({
             <div className="relative">
               <button
                 onClick={() => setShowThemeMenu(!showThemeMenu)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-gray-300 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-[#202020] hover:bg-[#282828] text-[#FFFFFF] border border-[#353535] transition-colors cursor-pointer"
               >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <Sparkles className="w-3.5 h-3.5 text-[#D6B56D]" />
                 <span className="capitalize">{theaterSetting}</span>
               </button>
 
               {showThemeMenu && (
                 <div
-                  className="absolute right-0 bottom-full mb-2 w-44 glass-dropdown rounded-xl p-1.5 z-30 shadow-xl"
+                  className="absolute right-0 bottom-full mb-2 w-44 cinema-dropdown rounded-xl p-1.5 z-30 shadow-xl"
                   onClick={() => setShowThemeMenu(false)}
                 >
-                  <div className="px-2 py-1 text-[10px] text-gray-400 uppercase font-semibold">
+                  <div className="px-2 py-1 text-[10px] text-[#777777] uppercase font-semibold">
                     Cinema Ambience
                   </div>
                   {(['classic', 'cozy', 'gaming', 'minimal'] as const).map((mode) => (
@@ -217,7 +212,7 @@ export function PlaybackControls({
                       key={mode}
                       onClick={() => onChangeTheme(mode)}
                       className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs capitalize transition-colors ${
-                        theaterSetting === mode ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-white/10'
+                        theaterSetting === mode ? 'bg-[#D6B56D] text-[#090909] font-bold' : 'text-[#B9B9B9] hover:bg-[#202020] hover:text-[#FFFFFF]'
                       }`}
                     >
                       <span>{mode}</span>
@@ -232,9 +227,9 @@ export function PlaybackControls({
             <button
               onClick={handleShareLink}
               data-testid="invite-btn"
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-gray-200 transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#202020] hover:bg-[#282828] text-[#FFFFFF] border border-[#353535] hover:border-[#D6B56D] transition-colors cursor-pointer"
             >
-              <Share2 className="w-3.5 h-3.5 text-indigo-400" />
+              <Share2 className="w-3.5 h-3.5 text-[#D6B56D]" />
               <span>{copiedToast ? 'Copied Link!' : 'Invite'}</span>
             </button>
           </div>

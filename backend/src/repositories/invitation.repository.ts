@@ -124,6 +124,29 @@ export class InvitationRepository {
     return false;
   }
 
+  public async revokeAllInvitationsForRoom(roomId: string): Promise<number> {
+    const pool = this.getPool();
+    if (this.isConnected() && pool) {
+      const res = await pool.query(
+        `UPDATE room_invitations SET is_revoked = TRUE WHERE room_id = $1 AND is_revoked = FALSE`,
+        [roomId]
+      );
+      return res.rowCount ?? 0;
+    }
+
+    let count = 0;
+    for (const inv of this.inMemoryDb.invitations) {
+      if (inv.roomId === roomId && !inv.isRevoked) {
+        inv.isRevoked = true;
+        count++;
+      }
+    }
+    if (count > 0) {
+      this.storage.persist(this.inMemoryDb);
+    }
+    return count;
+  }
+
   public async incrementInvitationUse(token: string): Promise<boolean> {
     const pool = this.getPool();
     if (this.isConnected() && pool) {

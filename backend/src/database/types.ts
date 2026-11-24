@@ -2,6 +2,18 @@ export type Role = 'USER' | 'ADMIN';
 export type RoomRole = 'OWNER' | 'MODERATOR' | 'PARTICIPANT';
 export type RoomPrivacy = 'PUBLIC' | 'PRIVATE';
 export type VideoProviderType = 'YOUTUBE' | 'DIRECT' | 'HLS' | 'GOOGLE_DRIVE' | 'UNSUPPORTED';
+export type RoomStatus = 'ACTIVE' | 'CLOSING' | 'CLOSED';
+export type SessionStatus = 'ACTIVE' | 'CLOSING' | 'CLOSED';
+export type ClosureReason =
+  | 'HOST_ENDED'
+  | 'HOST_CLOSED'
+  | 'ABANDONED_TIMEOUT'
+  | 'HOST_DEPARTED'
+  | 'MANUAL_CLOSE'
+  | 'INACTIVITY_TIMEOUT'
+  | 'ALL_PARTICIPANTS_LEFT'
+  | 'ADMIN_TERMINATED';
+export type TransferType = 'VOLUNTARY' | 'HOST_DISCONNECT_RECOVERY' | 'MANUAL' | 'AUTOMATIC';
 
 export interface User {
   id: string;
@@ -50,8 +62,51 @@ export interface Room {
   currentVideoUrl: string | null;
   currentProvider: VideoProviderType;
   isEmergencyPaused: boolean;
+  status: RoomStatus;
+  activeSessionId: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface RoomSession {
+  id: string;
+  roomId: string;
+  roomSlug: string;
+  roomName: string;
+  originalHostId: string | null;
+  originalHostUsername: string;
+  finalHostId: string | null;
+  finalHostUsername: string;
+  createdAt: Date;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  totalDurationSeconds: number;
+  status: SessionStatus;
+  closureReason: ClosureReason | null;
+}
+
+export interface ParticipantAttendance {
+  id: string;
+  sessionId: string;
+  userId: string | null;
+  displayName: string;
+  joinedAt: Date;
+  leftAt: Date | null;
+  durationSeconds: number;
+  isOriginalHost: boolean;
+  becameHost: boolean;
+}
+
+export interface HostTransferHistory {
+  id: string;
+  sessionId: string;
+  previousHostId: string | null;
+  previousHostUsername: string;
+  newHostId: string | null;
+  newHostUsername: string;
+  transferredAt: Date;
+  reason: string;
+  transferType: TransferType;
 }
 
 export interface RoomParticipant {

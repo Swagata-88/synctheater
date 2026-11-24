@@ -4,9 +4,11 @@ import { db } from '../../database';
 import { Room, RoomParticipant, RoomInvitation, VideoProviderType } from '../../database/types';
 import { videoService } from '../video/video.service';
 import { config } from '../../config';
+import { broadcastHostTransfer, broadcastRoomClosed } from '../../realtime/socket.gateway';
 
 export class RoomsService {
   private static instance: RoomsService;
+  private static transferLocks = new Map<string, Promise<void>>();
 
   public static getInstance(): RoomsService {
     if (!RoomsService.instance) {
@@ -63,6 +65,20 @@ export class RoomsService {
       currentProvider: provider,
     });
 
+    // Initialize historical session for this watch room
+    const hostUser = await db.findUserById(data.ownerId);
+    const session = await db.createRoomSession({
+      roomId: room.id,
+      roomSlug: room.slug,
+      roomName: room.name,
+      originalHostId: data.ownerId,
+      originalHostUsername: hostUser?.username || 'Host',
+    });
+
+    await db.updateRoomActiveSession(room.id, session.id);
+    room.activeSessionId = session.id;
+    room.status = 'ACTIVE';
+
     // Automatically generate an initial invitation token for the room owner
     const inviteToken = crypto.randomBytes(24).toString('base64url');
     const expiresAt = new Date(Date.now() + (config.invitationTokenTtlHours || 72) * 60 * 60 * 1000);
@@ -88,6 +104,10 @@ export class RoomsService {
     const room = await db.findRoomBySlug(roomSlug);
     if (!room) {
       throw new Error('Watch room not found.');
+    }
+
+    if (room.status === 'CLOSED') {
+      throw new Error('Cannot create invitations: this room has been closed.');
     }
 
     // Verify requester is owner or moderator
@@ -160,6 +180,10 @@ export class RoomsService {
       return { valid: false, error: 'Watch room not found.' };
     }
 
+    if (room.status === 'CLOSED') {
+      return { valid: false, error: 'This watch room has been closed by the host.' };
+    }
+
     const invitation = await db.findInvitationByToken(token);
     if (!invitation || invitation.roomId !== room.id) {
       return { valid: false, error: 'Invalid or unrecognized invitation token.' };
@@ -198,6 +222,15 @@ export class RoomsService {
   } | null> {
     const room = await db.findRoomBySlug(slug);
     if (!room) return null;
+
+    if (room.status === 'CLOSED') {
+      return {
+        room,
+        participants: [],
+        isAuthorized: false,
+        unauthorizedReason: 'This watch room has been closed by the host.',
+      };
+    }
 
     let isAuthorized = false;
     let participant: RoomParticipant | null = null;
@@ -274,6 +307,10 @@ export class RoomsService {
       throw new Error('Room not found.');
     }
 
+    if (room.status === 'CLOSED') {
+      throw new Error('This watch room has been closed and is no longer accepting participants.');
+    }
+
     const isOwner = room.ownerId === userId;
     const existingPart = await db.findParticipant(room.id, userId);
 
@@ -314,11 +351,23 @@ export class RoomsService {
       }
     }
 
-    const participant = await db.addParticipant(
+    // Atomic Acting Custodian assignment with database-level concurrency control
+    const participant = await db.addParticipantWithCustodianship(
       room.id,
       userId,
-      isOwner ? 'OWNER' : 'PARTICIPANT'
+      isOwner
     );
+
+    // Record attendance interval in historical session
+    if (room.activeSessionId) {
+      const user = await db.findUserById(userId);
+      await db.recordAttendanceJoin({
+        sessionId: room.activeSessionId,
+        userId,
+        displayName: user?.username || 'Participant',
+        isOriginalHost: isOwner,
+      });
+    }
 
     return { room, participant };
   }
@@ -327,9 +376,13 @@ export class RoomsService {
     const room = await db.findRoomBySlug(slug);
     if (!room) return false;
 
+    if (room.activeSessionId) {
+      await db.recordAttendanceLeave(room.activeSessionId, userId);
+    }
+
     await db.removeParticipant(room.id, userId);
 
-    if (room.ownerId === userId) {
+    if (room.ownerId === userId && room.status !== 'CLOSED') {
       const remaining = await db.listParticipants(room.id);
       if (remaining.length > 0) {
         const nextOwner = remaining.find((p) => p.role === 'MODERATOR') || remaining[0];
@@ -354,27 +407,133 @@ export class RoomsService {
       throw new Error('The room owner cannot be kicked.');
     }
 
+    const targetPart = await db.findParticipant(room.id, targetUserId);
+    if (targetPart?.role === 'MODERATOR' && requesterPart.role !== 'OWNER') {
+      throw new Error('Moderators cannot kick other moderators. Only the room host can.');
+    }
+
+    if (room.activeSessionId) {
+      await db.recordAttendanceLeave(room.activeSessionId, targetUserId);
+    }
+
     return db.removeParticipant(room.id, targetUserId);
   }
 
+  public async transferHost(
+    slug: string,
+    currentHostId: string,
+    newHostId: string
+  ): Promise<{
+    room: Room;
+    previousHostId: string;
+    newHostId: string;
+    newHostUsername: string;
+  }> {
+    // Concurrency protection: wait for any ongoing transfer on this room to complete
+    while (RoomsService.transferLocks.has(slug)) {
+      await RoomsService.transferLocks.get(slug);
+    }
+
+    let releaseLock: () => void = () => {};
+    const lockPromise = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    RoomsService.transferLocks.set(slug, lockPromise);
+
+    try {
+      const room = await db.findRoomBySlug(slug);
+      if (!room) throw new Error('Watch room not found.');
+
+      const currentHostUser = await db.findUserById(currentHostId);
+      const newHostUser = await db.findUserById(newHostId);
+      const currentHostUsername = currentHostUser?.username || 'Host';
+      const newHostUsername = newHostUser?.username || 'Host';
+
+      // Atomic single-transaction host transfer protected by SELECT ... FOR UPDATE
+      const { room: updatedRoom, participants } = await db.executeAtomicHostTransfer({
+        roomId: room.id,
+        roomSlug: slug,
+        currentHostId,
+        newHostId,
+        newHostUsername,
+        currentHostUsername,
+        sessionId: room.activeSessionId,
+        reason: 'VOLUNTARY_TRANSFER',
+        transferType: 'VOLUNTARY',
+      });
+
+      await broadcastHostTransfer(room.slug, newHostId, newHostUsername, participants);
+
+      return {
+        room: updatedRoom,
+        previousHostId: currentHostId,
+        newHostId,
+        newHostUsername,
+      };
+    } finally {
+      releaseLock();
+      RoomsService.transferLocks.delete(slug);
+    }
+  }
+
   public async transferOwnership(slug: string, currentOwnerId: string, newOwnerId: string): Promise<Room> {
+    const res = await this.transferHost(slug, currentOwnerId, newOwnerId);
+    return res.room;
+  }
+
+  public async endRoom(
+    slug: string,
+    hostUserId: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    room: Room;
+  }> {
     const room = await db.findRoomBySlug(slug);
-    if (!room) throw new Error('Room not found.');
+    if (!room) throw new Error('Watch room not found.');
 
-    if (room.ownerId !== currentOwnerId) {
-      throw new Error('Only the current room owner can transfer ownership.');
+    // Idempotent: if already closed, return safe response
+    if (room.status === 'CLOSED') {
+      return {
+        success: true,
+        message: 'Room is already closed.',
+        room,
+      };
     }
 
-    const newOwnerPart = await db.findParticipant(room.id, newOwnerId);
-    if (!newOwnerPart) {
-      throw new Error('The target user is not a participant in this room.');
+    const isOwner = room.ownerId === hostUserId;
+    if (!isOwner) {
+      // Check if user is an active MODERATOR acting as custodian while registered owner is absent
+      const participants = await db.listParticipants(room.id);
+      const requesterPart = participants.find((p) => p.userId === hostUserId);
+      const isOwnerPresent = participants.some((p) => p.userId === room.ownerId);
+      if (!requesterPart || requesterPart.role !== 'MODERATOR' || isOwnerPresent) {
+        throw new Error('Only the current room host can end the room.');
+      }
     }
 
-    await db.updateParticipantRole(room.id, currentOwnerId, 'MODERATOR');
-    await db.updateParticipantRole(room.id, newOwnerId, 'OWNER');
+    // 1. Mark operational room status as CLOSED
+    await db.updateRoomStatus(room.id, 'CLOSED');
 
-    const updated = await db.updateRoom(room.id, { ownerId: newOwnerId });
-    return updated!;
+    // 2. Finalize historical session and close all open attendance intervals
+    if (room.activeSessionId) {
+      await db.finalizeRoomSession(room.activeSessionId, 'HOST_CLOSED');
+    }
+
+    // 3. Revoke all active room invitations
+    await db.revokeAllInvitationsForRoom(room.id);
+
+    // 4. Notify connected participants and clean up presence
+    await broadcastRoomClosed(room.slug, 'The host has ended this watch room.');
+
+    return {
+      success: true,
+      message: 'Room ended successfully.',
+      room: {
+        ...room,
+        status: 'CLOSED',
+      },
+    };
   }
 }
 

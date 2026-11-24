@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Smile, Bell } from 'lucide-react';
+import { Send, Bell } from 'lucide-react';
 
 export interface ChatMsg {
   id: string;
@@ -56,14 +56,14 @@ export function ChatPanel({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0d101a]/70 rounded-2xl border border-white/10 overflow-hidden">
+    <div className="flex flex-col h-full cinema-card border border-[#353535] overflow-hidden">
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3.5 pr-2">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center text-gray-500 p-6">
+          <div className="h-full flex flex-col items-center justify-center text-center text-[#777777] p-6">
             <span className="text-3xl mb-2">🍿</span>
-            <p className="text-xs font-semibold text-gray-400">The chat room is quiet</p>
-            <p className="text-[11px] text-gray-500">Say hello or react with popcorn!</p>
+            <p className="text-xs font-bold text-[#FFFFFF]">The chat room is quiet</p>
+            <p className="text-[11px] text-[#777777] mt-0.5">Say hello or react with popcorn!</p>
           </div>
         ) : (
           messages.map((msg) => {
@@ -71,9 +71,9 @@ export function ChatPanel({
               return (
                 <div
                   key={msg.id}
-                  className="py-1 px-3 rounded-xl bg-white/5 border border-white/5 text-center text-xs text-gray-300 flex items-center justify-center gap-1.5"
+                  className="py-1 px-3 rounded-xl bg-[#202020] border border-[#353535] text-center text-xs text-[#F0D89F] flex items-center justify-center gap-1.5 shadow-sm"
                 >
-                  <Bell className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <Bell className="w-3.5 h-3.5 text-[#D6B56D] shrink-0" />
                   <span>{msg.content}</span>
                 </div>
               );
@@ -87,19 +87,19 @@ export function ChatPanel({
                     `https://api.dicebear.com/7.x/bottts/svg?seed=${msg.userId}`
                   }
                   alt={msg.username}
-                  className="w-7 h-7 rounded-full bg-indigo-950 border border-white/10 shrink-0 mt-0.5 object-cover"
+                  className="w-7 h-7 rounded-full bg-[#202020] border border-[#353535] shrink-0 mt-0.5 object-cover"
                 />
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2 mb-0.5">
-                    <span className="text-xs font-semibold text-gray-200 truncate">
+                    <span className="text-xs font-semibold text-[#FFFFFF] truncate">
                       {msg.username}
                     </span>
-                    <span className="text-[10px] text-gray-500 font-mono">
+                    <span className="text-[10px] text-[#777777] font-mono">
                       {formatMessageTime(msg.createdAt)}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-300 leading-relaxed break-words bg-black/20 p-2 rounded-xl rounded-tl-none border border-white/5">
+                  <p className="text-xs text-[#B9B9B9] leading-relaxed break-words bg-[#111111] p-2.5 rounded-xl rounded-tl-none border border-[#353535]">
                     {msg.content}
                   </p>
                 </div>
@@ -111,12 +111,12 @@ export function ChatPanel({
       </div>
 
       {/* Floating Emoji Quick Reactions Bar */}
-      <div className="px-3 py-1.5 bg-black/40 border-t border-white/5 flex items-center justify-between gap-1">
+      <div className="px-3 py-1.5 bg-[#111111] border-t border-[#353535] flex items-center justify-between gap-1">
         {QUICK_EMOJIS.map((emoji) => (
           <button
             key={emoji}
             onClick={() => onSendReaction(emoji)}
-            className="text-base hover:scale-125 transition-transform p-1 rounded-lg hover:bg-white/10"
+            className="text-base hover:scale-125 transition-transform p-1 rounded-lg hover:bg-[#202020] cursor-pointer"
             title={`React with ${emoji}`}
           >
             {emoji}
@@ -125,17 +125,18 @@ export function ChatPanel({
       </div>
 
       {/* Chat Input */}
-      <form onSubmit={handleSubmit} className="p-3 bg-black/50 border-t border-white/10 flex gap-2">
+      <form onSubmit={handleSubmit} className="p-3 bg-[#111111] border-t border-[#353535] flex gap-2">
         <input
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           placeholder="Send a message to the room..."
-          className="flex-1 px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-gray-500 focus:border-indigo-500 outline-none"
+          className="flex-1 px-3.5 py-2 rounded-xl bg-[#171717] border border-[#353535] text-xs text-[#FFFFFF] placeholder-[#777777] focus:border-[#D6B56D] outline-none transition-colors"
         />
         <button
           type="submit"
-          className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer"
+          className="px-3.5 py-2 rounded-xl btn-gold-primary text-xs font-bold flex items-center justify-center transition-all cursor-pointer shrink-0"
+          title="Send message"
         >
           <Send className="w-3.5 h-3.5" />
         </button>

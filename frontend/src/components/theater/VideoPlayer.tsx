@@ -256,7 +256,7 @@ export function VideoPlayer({
   return (
     <div
       ref={containerRef}
-      className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center border border-white/10"
+      className="relative w-full aspect-video bg-[#000000] rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center border border-[#353535]"
     >
       {/* 1. YOUTUBE PLAYER CONTAINER */}
       {provider === 'YOUTUBE' && (
@@ -269,7 +269,7 @@ export function VideoPlayer({
       {(provider === 'DIRECT' || provider === 'HLS') && (
         <video
           ref={videoElementRef}
-          className="w-full h-full object-contain"
+          className="w-full h-full object-contain bg-[#000000]"
           playsInline
           controls={isOwnerOrMod}
         />
@@ -278,8 +278,8 @@ export function VideoPlayer({
       {/* 3. GOOGLE DRIVE PREVIEW EMBED */}
       {provider === 'GOOGLE_DRIVE' && (
         <div className="relative w-full h-full">
-          <div className="absolute top-3 left-3 right-3 z-20 flex items-center gap-2.5 bg-black/85 backdrop-blur-md border border-amber-500/40 text-amber-200 text-xs px-3.5 py-2 rounded-xl shadow-xl pointer-events-auto">
-            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+          <div className="absolute top-3 left-3 right-3 z-20 flex items-center gap-2.5 bg-[#171717]/90 backdrop-blur-md border border-[#D6B56D]/40 text-[#F0D89F] text-xs px-3.5 py-2 rounded-xl shadow-xl pointer-events-auto">
+            <AlertCircle className="w-4 h-4 text-[#D6B56D] shrink-0" />
             <p className="leading-tight">
               <strong>Google Drive Preview:</strong> Automatic playback synchronization and seek control cannot be guaranteed due to third-party iframe sandboxing policies.
             </p>
@@ -296,11 +296,11 @@ export function VideoPlayer({
       {/* 4. UNSUPPORTED SOURCE FALLBACK */}
       {provider === 'UNSUPPORTED' && (
         <div className="p-8 text-center max-w-md">
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 mx-auto flex items-center justify-center mb-4">
-            ⚠️
+          <div className="w-16 h-16 rounded-2xl bg-[#202020] border border-[#D6B56D]/40 text-[#D6B56D] mx-auto flex items-center justify-center mb-4 text-2xl font-bold">
+            !
           </div>
-          <h3 className="text-lg font-bold text-white mb-2">Unsupported Video Source</h3>
-          <p className="text-xs text-gray-400 mb-6">
+          <h3 className="text-lg font-bold text-[#FFFFFF] mb-2">Unsupported Video Source</h3>
+          <p className="text-xs text-[#B9B9B9] mb-6 leading-relaxed">
             SYNCTHEATER supports YouTube videos & Shorts, Google Drive share links, direct MP4/WebM files, and HLS .m3u8 streams.
           </p>
         </div>

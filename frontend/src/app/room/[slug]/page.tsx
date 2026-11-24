@@ -7,17 +7,32 @@ import { Navbar } from '../../../components/Navbar';
 import { VideoPlayer } from '../../../components/theater/VideoPlayer';
 import { EmergencyPauseBanner } from '../../../components/theater/EmergencyPauseBanner';
 import { PlaybackControls } from '../../../components/theater/PlaybackControls';
+import dynamic from 'next/dynamic';
 import { ChatPanel } from '../../../components/chat/ChatPanel';
 import { ParticipantPanel } from '../../../components/theater/ParticipantPanel';
-import { VoiceVideoPanel } from '../../../components/livekit/VoiceVideoPanel';
 import { RoomAccessDenied } from '../../../components/theater/RoomAccessDenied';
+
+const VoiceVideoPanel = dynamic(
+  () => import('../../../components/livekit/VoiceVideoPanel').then((mod) => mod.VoiceVideoPanel),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center h-full p-6 text-center text-xs text-[#B9B9B9]">
+        <div className="w-4 h-4 border-2 border-[#D6B56D] border-t-transparent rounded-full animate-spin mb-2" />
+        Connecting to Voice & Video Lounge...
+      </div>
+    ),
+  }
+);
 import { RoomInviteModal } from '../../../components/theater/RoomInviteModal';
 import { ChangeVideoModal } from '../../../components/theater/ChangeVideoModal';
 import { RoomPasswordModal } from '../../../components/theater/RoomPasswordModal';
+import { LeaveRoomModal } from '../../../components/theater/LeaveRoomModal';
+import { EndRoomModal } from '../../../components/theater/EndRoomModal';
 import { useRoomSocket } from '../../../hooks/useRoomSocket';
 import { useRoomInvitations } from '../../../hooks/useRoomInvitations';
 import { generateInviteUrl } from '../../../lib/api';
-import { MessageSquare, Users, Radio, Share2, Lock } from 'lucide-react';
+import { MessageSquare, Users, Radio, Share2, Lock, LogOut, Power } from 'lucide-react';
 
 function TheaterRoomContent() {
   const params = useParams();
@@ -30,6 +45,8 @@ function TheaterRoomContent() {
   const [activeTab, setActiveTab] = useState<'chat' | 'participants' | 'voice'>('chat');
   const [showChangeVideoModal, setShowChangeVideoModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [showEndRoomModal, setShowEndRoomModal] = useState(false);
   const [theaterTheme, setTheaterTheme] = useState<'classic' | 'cozy' | 'gaming' | 'minimal'>(
     (preferences?.theaterSetting as any) || 'classic'
   );
@@ -68,6 +85,9 @@ function TheaterRoomContent() {
     handlePasswordSubmit,
     handleKickParticipant,
     handleTransferOwnership,
+    handleTransferHost,
+    handleLeaveRoom,
+    handleEndRoom,
     emergencyFeedback,
     emergencyError,
     clearEmergencyError,
@@ -110,7 +130,7 @@ function TheaterRoomContent() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col theater-${theaterTheme} text-white transition-colors duration-500`}>
+    <div className={`min-h-screen flex flex-col theater-${theaterTheme} text-[#FFFFFF] transition-colors duration-500`}>
       <Navbar />
 
       {/* Floating Emoji Reactions Overlay */}
@@ -129,18 +149,18 @@ function TheaterRoomContent() {
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-4 lg:px-6 py-4 flex flex-col gap-4">
         {/* Emergency Pause Feedback / Error Toast */}
         {emergencyError && (
-          <div className="w-full p-3 rounded-xl bg-red-900/80 border border-red-500/50 text-red-200 text-xs flex items-center justify-between shadow-lg">
+          <div className="w-full p-3 rounded-xl bg-red-950/90 border border-red-500/50 text-red-200 text-xs flex items-center justify-between shadow-lg">
             <span>{emergencyError}</span>
             <button
               onClick={clearEmergencyError}
-              className="text-white hover:text-red-300 font-bold px-2 py-0.5 rounded cursor-pointer"
+              className="text-[#FFFFFF] hover:text-red-300 font-bold px-2 py-0.5 rounded cursor-pointer"
             >
               ✕
             </button>
           </div>
         )}
         {emergencyFeedback && (
-          <div className="w-full p-3 rounded-xl bg-emerald-900/80 border border-emerald-500/50 text-emerald-200 text-xs flex items-center justify-between shadow-lg animate-pulse">
+          <div className="w-full p-3 rounded-xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-200 text-xs flex items-center justify-between shadow-lg animate-pulse">
             <span>{emergencyFeedback}</span>
           </div>
         )}
@@ -158,32 +178,52 @@ function TheaterRoomContent() {
           {/* Left Column: Player & Controls (8 cols on lg) */}
           <div className="lg:col-span-8 flex flex-col gap-3">
             {/* Room Info Header */}
-            <div className="flex items-center justify-between px-2">
+            <div className="flex items-center justify-between px-1">
               <div className="min-w-0">
                 <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight truncate flex items-center gap-2">
-                  <span>{room?.name || 'Synchronized Cinema'}</span>
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded-full">
-                    <Lock className="w-3 h-3 text-amber-400 shrink-0" />
+                  <span className="text-[#FFFFFF]">{room?.name || 'Synchronized Cinema'}</span>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-[#202020] border border-[#D6B56D]/40 text-[#D6B56D] px-2.5 py-0.5 rounded-full">
+                    <Lock className="w-3 h-3 text-[#D6B56D] shrink-0" />
                     PRIVATE
                   </span>
                 </h1>
-                <p className="text-xs text-gray-400 truncate">
-                  {room?.description || 'Watching together in synchronized private harmony.'}
+                <p className="text-xs text-[#B9B9B9] truncate mt-0.5">
+                  {room?.description || 'Watching together in private synchronized harmony.'}
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
                 <button
                   onClick={() => setShowInviteModal(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#202020] hover:bg-[#282828] border border-[#353535] hover:border-[#D6B56D] text-[#D6B56D] hover:text-[#F0D89F] transition-all cursor-pointer"
                   title="Invite guests or manage invitations"
                 >
                   <Share2 className="w-3.5 h-3.5" />
-                  <span>Invite Guests</span>
+                  <span className="hidden sm:inline">Invite Guests</span>
                 </button>
 
-                <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/15 border border-emerald-500/25 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                  <Radio className="w-3 h-3 animate-pulse" />
+                <button
+                  onClick={() => setShowLeaveModal(true)}
+                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#202020] hover:bg-[#282828] border border-[#353535] hover:border-zinc-400 text-[#B9B9B9] hover:text-[#FFFFFF] transition-all cursor-pointer"
+                  title="Leave this watch room"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Leave</span>
+                </button>
+
+                {isOwner && (
+                  <button
+                    onClick={() => setShowEndRoomModal(true)}
+                    className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-950/40 hover:bg-red-900/60 border border-red-800/60 hover:border-red-500 text-red-300 hover:text-white transition-all cursor-pointer"
+                    title="End room for all viewers"
+                  >
+                    <Power className="w-3.5 h-3.5 text-red-400" />
+                    <span className="hidden sm:inline">End Room</span>
+                  </button>
+                )}
+
+                <span className="text-[11px] font-mono text-[#D6B56D] bg-[#202020] border border-[#D6B56D]/30 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                  <Radio className="w-3 h-3 animate-pulse text-[#D6B56D]" />
                   {playbackState.status}
                 </span>
               </div>
@@ -231,13 +271,13 @@ function TheaterRoomContent() {
           {/* Right Column: Social / Chat / LiveKit Panel (4 cols on lg) */}
           <div className="lg:col-span-4 flex flex-col h-[650px] lg:h-[calc(100vh-140px)] min-h-[500px]">
             {/* Panel Tabs Navigation */}
-            <div className="flex items-center gap-1 p-1 bg-black/40 rounded-xl border border-white/10 mb-3">
+            <div className="flex items-center gap-1 p-1 bg-[#111111] rounded-xl border border-[#353535] mb-3">
               <button
                 onClick={() => setActiveTab('chat')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'chat'
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    ? 'btn-gold-primary'
+                    : 'text-[#B9B9B9] hover:text-[#FFFFFF] hover:bg-[#171717]'
                 }`}
               >
                 <MessageSquare className="w-3.5 h-3.5" />
@@ -246,10 +286,10 @@ function TheaterRoomContent() {
 
               <button
                 onClick={() => setActiveTab('participants')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'participants'
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    ? 'btn-gold-primary'
+                    : 'text-[#B9B9B9] hover:text-[#FFFFFF] hover:bg-[#171717]'
                 }`}
               >
                 <Users className="w-3.5 h-3.5" />
@@ -258,10 +298,10 @@ function TheaterRoomContent() {
 
               <button
                 onClick={() => setActiveTab('voice')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'voice'
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    ? 'btn-gold-primary'
+                    : 'text-[#B9B9B9] hover:text-[#FFFFFF] hover:bg-[#171717]'
                 }`}
               >
                 <Radio className="w-3.5 h-3.5" />
@@ -328,13 +368,38 @@ function TheaterRoomContent() {
         onSubmitPassword={handlePasswordSubmit}
         error={passwordError}
       />
+
+      {/* LEAVE ROOM MODAL */}
+      <LeaveRoomModal
+        isOpen={showLeaveModal}
+        onClose={() => setShowLeaveModal(false)}
+        isHost={isOwner}
+        participants={participants}
+        currentUserId={user?.id}
+        onConfirmLeave={handleLeaveRoom}
+        onTransferAndLeave={async (successorId) => {
+          await handleTransferHost(successorId);
+          await handleLeaveRoom();
+        }}
+        onOpenEndRoomModal={() => setShowEndRoomModal(true)}
+      />
+
+      {/* END ROOM MODAL (HOST ONLY) */}
+      {isOwner && (
+        <EndRoomModal
+          isOpen={showEndRoomModal}
+          onClose={() => setShowEndRoomModal(false)}
+          roomName={room?.name || 'Watch Room'}
+          onConfirmEndRoom={handleEndRoom}
+        />
+      )}
     </div>
   );
 }
 
 export default function TheaterRoomPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#07090e] text-white flex items-center justify-center text-sm text-gray-400">Loading Theater Room...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#090909] text-[#FFFFFF] flex items-center justify-center text-sm text-[#B9B9B9]">Loading Theater Room...</div>}>
       <TheaterRoomContent />
     </Suspense>
   );

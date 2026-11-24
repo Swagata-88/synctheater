@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { authService } from './auth.service';
 import { authenticate, AuthenticatedRequest } from './auth.middleware';
-import { authRateLimiter } from './rate.limiter';
+import { authRateLimiter, passwordResetRateLimiter } from './rate.limiter';
 import { db } from '../../database';
 
 export const authRouter = Router();
@@ -14,7 +14,10 @@ const registerSchema = z.object({
     .min(3, 'Username must be at least 3 characters.')
     .max(30, 'Username cannot exceed 30 characters.')
     .regex(/^[a-zA-Z0-9_-]+$/, 'Username can only contain letters, numbers, underscores and hyphens.'),
-  password: z.string().min(6, 'Password must be at least 6 characters.'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters long.')
+    .max(128, 'Password cannot exceed 128 characters.'),
 });
 
 const loginSchema = z.object({
@@ -28,7 +31,10 @@ const forgotPasswordSchema = z.object({
 
 const resetPasswordSchema = z.object({
   token: z.string().min(1, 'Reset token is required.'),
-  newPassword: z.string().min(6, 'Password must be at least 6 characters.'),
+  newPassword: z
+    .string()
+    .min(8, 'Password must be at least 8 characters long.')
+    .max(128, 'Password cannot exceed 128 characters.'),
 });
 
 // POST /api/auth/register
@@ -89,29 +95,34 @@ authRouter.get('/me', authenticate, async (req: AuthenticatedRequest, res: Respo
 });
 
 // POST /api/auth/forgot-password
-authRouter.post('/forgot-password', async (req: Request, res: Response) => {
+authRouter.post('/forgot-password', passwordResetRateLimiter, async (req: Request, res: Response) => {
   try {
     const validated = forgotPasswordSchema.parse(req.body);
-    const result = await authService.requestPasswordReset(validated.email);
-    return res.json({
+    await authService.requestPasswordReset(validated.email);
+    // Generic response that never leaks account existence or exposes reset tokens
+    return res.status(200).json({
       success: true,
-      message: 'If the email is registered, password reset instructions have been sent.',
-      resetToken: result.resetToken, // Returned for dev/testing ease
+      message: 'If an account exists with this email address, password reset instructions have been sent.',
     });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: err.errors[0].message });
     }
-    return res.status(500).json({ error: err.message });
+    // Return generic success to prevent email enumeration or internal error leakage
+    console.error('[Auth:ForgotPassword] Error:', err.message);
+    return res.status(200).json({
+      success: true,
+      message: 'If an account exists with this email address, password reset instructions have been sent.',
+    });
   }
 });
 
 // POST /api/auth/reset-password
-authRouter.post('/reset-password', async (req: Request, res: Response) => {
+authRouter.post('/reset-password', passwordResetRateLimiter, async (req: Request, res: Response) => {
   try {
     const validated = resetPasswordSchema.parse(req.body);
     await authService.resetPassword(validated.token, validated.newPassword);
-    return res.json({
+    return res.status(200).json({
       success: true,
       message: 'Your password has been reset successfully. You can now log in.',
     });

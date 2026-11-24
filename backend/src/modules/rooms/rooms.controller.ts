@@ -241,3 +241,47 @@ roomsRouter.post('/:slug/transfer-owner', authenticate, async (req: Authenticate
     return res.status(403).json({ error: err.message });
   }
 });
+
+// POST /api/rooms/:slug/transfer-host - Voluntary host privileges transfer (Host only)
+roomsRouter.post('/:slug/transfer-host', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { newHostId } = req.body || {};
+    if (!newHostId || typeof newHostId !== 'string') {
+      return res.status(400).json({ error: 'newHostId is required.' });
+    }
+    const result = await roomsService.transferHost(
+      req.params.slug,
+      req.user!.userId,
+      newHostId
+    );
+    return res.json({
+      success: true,
+      message: 'Host privileges transferred successfully.',
+      ...result,
+    });
+  } catch (err: any) {
+    if (err.message.includes('not found')) {
+      return res.status(404).json({ error: err.message });
+    }
+    if (err.message.includes('Only the current room host')) {
+      return res.status(403).json({ error: err.message });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/rooms/:slug/end - End room lifecycle and finalize watch session (Host only)
+roomsRouter.post('/:slug/end', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const result = await roomsService.endRoom(req.params.slug, req.user!.userId);
+    return res.json(result);
+  } catch (err: any) {
+    if (err.message.includes('not found')) {
+      return res.status(404).json({ error: err.message });
+    }
+    if (err.message.includes('Only the current room host')) {
+      return res.status(403).json({ error: err.message });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+});

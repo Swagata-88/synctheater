@@ -3,54 +3,96 @@
 @tailwind utilities;
 
 :root {
-  --background: #090b10;
-  --foreground: #f3f4f6;
-  --card-bg: #11141f;
-  --border-color: #1f2536;
-  --accent-color: #6366f1;
+  --background: #090909;
+  --foreground: #FFFFFF;
+  --card-bg: #171717;
+  --surface-bg: #202020;
+  --border-color: #353535;
+  --accent-gold: #D6B56D;
+  --gold-light: #F0D89F;
+  --gold-dark: #94743D;
+  --text-muted: #B9B9B9;
+  --text-dim: #777777;
 }
 
-.theme-light {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card-bg: #ffffff;
-  --border-color: #e2e8f0;
-  --accent-color: #4f46e5;
+/* Luxury Metallic Gold Utilities */
+.gold-gradient-text {
+  background: linear-gradient(180deg, #F0D89F 0%, #D6B56D 50%, #94743D 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-gradient-border {
+  border-image: linear-gradient(to bottom, #F0D89F, #D6B56D, #94743D) 1;
+}
+
+/* Metallic Champagne Button */
+.btn-gold-primary {
+  background: linear-gradient(180deg, #E8CD8C 0%, #D6B56D 60%, #B8934A 100%);
+  color: #090909;
+  font-weight: 700;
+  box-shadow: 0 4px 16px rgba(214, 181, 109, 0.25);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-gold-primary:hover {
+  background: linear-gradient(180deg, #F0D89F 0%, #DDBF7D 60%, #C49F56 100%);
+  box-shadow: 0 6px 20px rgba(214, 181, 109, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-gold-primary:active {
+  transform: translateY(0);
+}
+
+.btn-gold-secondary {
+  background: #171717;
+  border: 1px solid #353535;
+  color: #FFFFFF;
+  transition: all 0.2s ease;
+}
+
+.btn-gold-secondary:hover {
+  background: #202020;
+  border-color: #D6B56D;
+  color: #F0D89F;
 }
 
 /* Theater Environments */
 .theater-classic {
-  background: radial-gradient(circle at 50% 20%, #151928 0%, #07090e 100%);
-  --theater-glow: rgba(234, 179, 8, 0.15);
+  background: radial-gradient(circle at 50% 15%, #18150F 0%, #090909 100%);
 }
 
 .theater-cozy {
-  background: radial-gradient(circle at 50% 20%, #201a17 0%, #0c0a09 100%);
-  --theater-glow: rgba(245, 158, 11, 0.18);
+  background: radial-gradient(circle at 50% 15%, #1B1712 0%, #0C0A08 100%);
 }
 
 .theater-gaming {
-  background: radial-gradient(circle at 50% 20%, #1b122c 0%, #06070a 100%);
-  --theater-glow: rgba(168, 85, 247, 0.22);
+  background: radial-gradient(circle at 50% 15%, #161616 0%, #080808 100%);
 }
 
 .theater-minimal {
   background: #000000;
-  --theater-glow: rgba(255, 255, 255, 0.05);
 }
 
-/* Glassmorphism helpers */
-.glass-panel {
-  background: rgba(17, 20, 31, 0.75);
+/* Cinema Cards & Panels */
+.cinema-card {
+  background: #171717;
+  border: 1px solid #353535;
+  border-radius: 1rem;
+}
+
+.cinema-panel {
+  background: rgba(23, 23, 23, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #353535;
 }
 
-.glass-dropdown {
-  background: rgba(15, 18, 28, 0.95);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+.cinema-dropdown {
+  background: #171717;
+  border: 1px solid #353535;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
 }
 
 /* Custom Cinema Scrollbar */
