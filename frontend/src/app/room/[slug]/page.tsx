@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { Navbar } from '../../../components/Navbar';
@@ -50,6 +50,8 @@ function TheaterRoomContent() {
   const [theaterTheme, setTheaterTheme] = useState<'classic' | 'cozy' | 'gaming' | 'minimal'>(
     (preferences?.theaterSetting as any) || 'classic'
   );
+  const fullscreenControllerRef = useRef<{ toggle: () => void } | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Unauthenticated recipient redirect preserving returnUrl
   useEffect(() => {
@@ -244,6 +246,8 @@ function TheaterRoomContent() {
               sequenceNumber={playbackState.sequenceNumber}
               isOwnerOrMod={isOwnerOrMod}
               isEmergencyPaused={playbackState.isEmergencyPaused}
+              fullscreenControllerRef={fullscreenControllerRef}
+              onFullscreenChange={setIsFullscreen}
               onTimeUpdate={(c, d) => {
                 setCurrentTime(c);
                 if (d) setDuration(d);
@@ -265,6 +269,8 @@ function TheaterRoomContent() {
               isOwnerOrMod={isOwnerOrMod}
               theaterSetting={theaterTheme}
               inviteUrl={activeInviteUrl || (inviteToken ? generateInviteUrl(slug, inviteToken) : undefined)}
+              isFullscreen={isFullscreen}
+              onToggleFullscreen={() => fullscreenControllerRef.current?.toggle()}
               onPlay={handlePlay}
               onPause={handlePause}
               onSeek={handleSeek}

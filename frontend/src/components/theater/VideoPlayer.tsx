@@ -1,11 +1,19 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, Minimize2, RefreshCw } from 'lucide-react';
 
 import { PlaybackMode, BroadcastStatus } from '../../types';
 import { classifyYouTubeBroadcast } from '../../lib/broadcastClassifier';
+import {
+  enterElementFullscreen,
+  exitElementFullscreen,
+  FullscreenMode,
+  getNativeFullscreenElement,
+  tryLockLandscape,
+  tryUnlockOrientation,
+} from '../../lib/fullscreen';
 
 const LIVE_STALL_THRESHOLD_MS = 10000;
 const LIVE_RECOVERY_COOLDOWN_MS = 15000;
@@ -26,6 +34,8 @@ interface VideoPlayerProps {
   sequenceNumber?: number;
   isOwnerOrMod: boolean;
   isEmergencyPaused?: boolean;
+  fullscreenControllerRef?: React.MutableRefObject<{ toggle: () => void } | null>;
+  onFullscreenChange?: (isFullscreen: boolean) => void;
   onPlayerReady?: () => void;
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   onPlayAction?: () => void;
@@ -60,6 +70,8 @@ export function VideoPlayer({
   sequenceNumber,
   isOwnerOrMod,
   isEmergencyPaused,
+  fullscreenControllerRef,
+  onFullscreenChange,
   onPlayerReady,
   onTimeUpdate,
   onPlayAction,
@@ -80,6 +92,7 @@ export function VideoPlayer({
   const sequenceNumberRef = useRef(sequenceNumber);
   const onBroadcastClassificationRef = useRef(onBroadcastClassification);
   const onAutoplayBlockedRef = useRef(onAutoplayBlocked);
+  const onFullscreenChangeRef = useRef(onFullscreenChange);
   const durationSamplesRef = useRef<number[]>([]);
   const lastReportedStatusRef = useRef<BroadcastStatus | null>(null);
 
@@ -106,6 +119,7 @@ export function VideoPlayer({
   sequenceNumberRef.current = sequenceNumber;
   onBroadcastClassificationRef.current = onBroadcastClassification;
   onAutoplayBlockedRef.current = onAutoplayBlocked;
+  onFullscreenChangeRef.current = onFullscreenChange;
 
   const [isReady, setIsReady] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -113,6 +127,130 @@ export function VideoPlayer({
   const [showManualReconnect, setShowManualReconnect] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenMode, setFullscreenMode] = useState<FullscreenMode | null>(null);
+  const isFullscreenRef = useRef(false);
+  const fullscreenModeRef = useRef<FullscreenMode | null>(null);
+  isFullscreenRef.current = isFullscreen;
+  fullscreenModeRef.current = fullscreenMode;
+
+  const updateFullscreenState = useCallback((active: boolean, mode: FullscreenMode | null) => {
+    setIsFullscreen(active);
+    setFullscreenMode(mode);
+    onFullscreenChangeRef.current?.(active);
+  }, []);
+
+  const exitFullscreen = useCallback(async () => {
+    const currentMode = fullscreenModeRef.current;
+    tryUnlockOrientation();
+    if (currentMode === 'native' || getNativeFullscreenElement()) {
+      await exitElementFullscreen();
+    }
+    updateFullscreenState(false, null);
+  }, [updateFullscreenState]);
+
+  const enterFullscreen = useCallback(async () => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const mode = await enterElementFullscreen(container, videoElementRef.current);
+    if (mode === 'native') {
+      updateFullscreenState(true, 'native');
+      await tryLockLandscape();
+    } else if (mode === 'webkit-video') {
+      updateFullscreenState(true, 'webkit-video');
+    } else {
+      updateFullscreenState(true, 'fallback');
+      await tryLockLandscape();
+    }
+  }, [updateFullscreenState]);
+
+  const handleToggleFullscreen = useCallback(() => {
+    if (isFullscreenRef.current) {
+      void exitFullscreen();
+    } else {
+      void enterFullscreen();
+    }
+  }, [enterFullscreen, exitFullscreen]);
+
+  useEffect(() => {
+    if (!fullscreenControllerRef) return;
+    fullscreenControllerRef.current = { toggle: handleToggleFullscreen };
+    return () => {
+      if (fullscreenControllerRef.current) {
+        fullscreenControllerRef.current = null;
+      }
+    };
+  }, [fullscreenControllerRef, handleToggleFullscreen]);
+
+  // Listen to native fullscreenchange / fullscreenerror and iOS webkit video events
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const nativeEl = getNativeFullscreenElement();
+      if (nativeEl && nativeEl === containerRef.current) {
+        updateFullscreenState(true, 'native');
+      } else if (!nativeEl && fullscreenModeRef.current === 'native') {
+        tryUnlockOrientation();
+        updateFullscreenState(false, null);
+      }
+    };
+
+    const handleFullscreenError = () => {
+      if (fullscreenModeRef.current === 'native') {
+        updateFullscreenState(true, 'fallback');
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('fullscreenerror', handleFullscreenError);
+    document.addEventListener('webkitfullscreenerror', handleFullscreenError);
+
+    const videoEl = videoElementRef.current;
+    const handleWebkitBegin = () => updateFullscreenState(true, 'webkit-video');
+    const handleWebkitEnd = () => {
+      tryUnlockOrientation();
+      updateFullscreenState(false, null);
+    };
+    videoEl?.addEventListener('webkitbeginfullscreen', handleWebkitBegin);
+    videoEl?.addEventListener('webkitendfullscreen', handleWebkitEnd);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('fullscreenerror', handleFullscreenError);
+      document.removeEventListener('webkitfullscreenerror', handleFullscreenError);
+      videoEl?.removeEventListener('webkitbeginfullscreen', handleWebkitBegin);
+      videoEl?.removeEventListener('webkitendfullscreen', handleWebkitEnd);
+    };
+  }, [provider, updateFullscreenState]);
+
+  // Fallback CSS fullscreen: lock body scroll & support Escape key
+  useEffect(() => {
+    if (!isFullscreen || fullscreenMode !== 'fallback') return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        void exitFullscreen();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isFullscreen, fullscreenMode, exitFullscreen]);
+
+  // Ensure orientation is unlocked if component unmounts while fullscreen
+  useEffect(() => {
+    return () => {
+      if (isFullscreenRef.current) {
+        tryUnlockOrientation();
+      }
+    };
+  }, []);
 
   const clearReconnectTimer = () => {
     if (reconnectTimeoutRef.current) {
@@ -574,11 +712,44 @@ export function VideoPlayer({
     }
   };
 
+  const containerClassName =
+    isFullscreen && fullscreenMode === 'fallback'
+      ? 'fixed inset-0 z-[100] w-screen h-[100dvh] bg-[#000000] overflow-hidden flex items-center justify-center'
+      : isFullscreen
+      ? 'relative w-full h-full bg-[#000000] overflow-hidden flex items-center justify-center'
+      : 'relative w-full aspect-video bg-[#000000] rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center border border-[#353535]';
+
   return (
     <div
       ref={containerRef}
-      className="relative w-full aspect-video bg-[#000000] rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center border border-[#353535]"
+      data-testid="video-player-container"
+      data-fullscreen={isFullscreen ? 'true' : 'false'}
+      className={containerClassName}
     >
+      {/* Floating Exit Fullscreen Control & Emergency Pause Status while in Fullscreen */}
+      {isFullscreen && (
+        <>
+          {isEmergencyPaused && (
+            <div
+              data-testid="fullscreen-emergency-badge"
+              className="absolute top-3 left-3 z-30 px-3 py-1.5 rounded-full bg-red-950/90 border border-red-500/70 text-red-100 text-xs font-bold uppercase tracking-wider shadow-lg pointer-events-none"
+            >
+              Emergency Paused
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => void exitFullscreen()}
+            data-testid="exit-fullscreen-btn"
+            aria-label="Exit fullscreen"
+            title="Exit fullscreen"
+            className="absolute top-3 right-3 z-30 p-2.5 rounded-xl bg-[#171717]/90 hover:bg-[#202020] text-[#F0D89F] border border-[#D6B56D]/50 shadow-xl backdrop-blur-md transition-colors cursor-pointer"
+          >
+            <Minimize2 className="w-4 h-4" />
+          </button>
+        </>
+      )}
+
       {/* 1. YOUTUBE PLAYER CONTAINER */}
       {provider === 'YOUTUBE' && (
         <div className="relative w-full h-full">
@@ -621,7 +792,11 @@ export function VideoPlayer({
       {/* 3. GOOGLE DRIVE PREVIEW EMBED */}
       {provider === 'GOOGLE_DRIVE' && (
         <div className="relative w-full h-full">
-          <div className="absolute top-3 left-3 right-3 z-20 flex items-center gap-2.5 bg-[#171717]/90 backdrop-blur-md border border-[#D6B56D]/40 text-[#F0D89F] text-xs px-3.5 py-2 rounded-xl shadow-xl pointer-events-auto">
+          <div
+            className={`absolute top-3 left-3 ${
+              isFullscreen ? 'right-16' : 'right-3'
+            } z-20 flex items-center gap-2.5 bg-[#171717]/90 backdrop-blur-md border border-[#D6B56D]/40 text-[#F0D89F] text-xs px-3.5 py-2 rounded-xl shadow-xl pointer-events-auto`}
+          >
             <AlertCircle className="w-4 h-4 text-[#D6B56D] shrink-0" />
             <p className="leading-tight">
               <strong>Google Drive Preview:</strong> Automatic playback synchronization and seek control cannot be guaranteed due to third-party iframe sandboxing policies.

@@ -9,6 +9,8 @@ import {
   Share2,
   Sparkles,
   Check,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { copyToClipboard } from '../../lib/clipboard';
 import { getAppUrl } from '../../lib/api';
@@ -25,6 +27,8 @@ interface PlaybackControlsProps {
   isOwnerOrMod: boolean;
   theaterSetting: 'classic' | 'cozy' | 'gaming' | 'minimal';
   inviteUrl?: string;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
   onPlay: () => void;
   onPause: () => void;
   onSeek: (time: number) => void;
@@ -44,6 +48,8 @@ export function PlaybackControls({
   isOwnerOrMod,
   theaterSetting,
   inviteUrl,
+  isFullscreen = false,
+  onToggleFullscreen,
   onPlay,
   onPause,
   onSeek,
@@ -279,6 +285,22 @@ export function PlaybackControls({
             >
               <Share2 className="w-3.5 h-3.5 text-[#D6B56D]" />
               <span>{copiedToast ? 'Copied Link!' : 'Invite'}</span>
+            </button>
+
+            {/* Fullscreen Toggle (Independent for all participants) */}
+            <button
+              type="button"
+              onClick={onToggleFullscreen}
+              data-testid="fullscreen-btn"
+              aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              className="flex items-center justify-center p-2 rounded-xl bg-[#202020] hover:bg-[#282828] text-[#D6B56D] hover:text-[#F0D89F] border border-[#353535] hover:border-[#D6B56D] transition-colors cursor-pointer"
+            >
+              {isFullscreen ? (
+                <Minimize2 className="w-4 h-4" />
+              ) : (
+                <Maximize2 className="w-4 h-4" />
+              )}
             </button>
           </div>
         </div>
