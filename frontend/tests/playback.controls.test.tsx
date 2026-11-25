@@ -305,4 +305,84 @@ describe('PlaybackControls Component', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
   });
+
+  describe('LIVE Mode UI & Scrubber Isolation', () => {
+    it('renders LIVE badge ONLY when playbackMode is LIVE and broadcastStatus is ACTIVE_LIVE, and hides scrubber', () => {
+      const { container } = render(
+        <PlaybackControls
+          status="PLAYING"
+          playbackMode="LIVE"
+          broadcastStatus="ACTIVE_LIVE"
+          currentTime={0}
+          duration={0}
+          playbackRate={1}
+          isOwnerOrMod={true}
+          theaterSetting="classic"
+          onPlay={() => {}}
+          onPause={() => {}}
+          onSeek={() => {}}
+          onEmergencyPause={() => {}}
+          onChangeVideoClick={() => {}}
+          onChangeRate={() => {}}
+          onChangeTheme={() => {}}
+        />
+      );
+
+      expect(screen.getByTestId('live-badge').textContent).toContain('LIVE');
+      expect(container.querySelector('input[type="range"]')).toBeNull();
+    });
+
+    it('renders neutral indication when playbackMode is LIVE and broadcastStatus is UNKNOWN_UNVERIFIED', () => {
+      const { container } = render(
+        <PlaybackControls
+          status="PAUSED"
+          playbackMode="LIVE"
+          broadcastStatus="UNKNOWN_UNVERIFIED"
+          currentTime={0}
+          duration={0}
+          playbackRate={1}
+          isOwnerOrMod={true}
+          theaterSetting="classic"
+          onPlay={() => {}}
+          onPause={() => {}}
+          onSeek={() => {}}
+          onEmergencyPause={() => {}}
+          onChangeVideoClick={() => {}}
+          onChangeRate={() => {}}
+          onChangeTheme={() => {}}
+        />
+      );
+
+      expect(screen.queryByTestId('live-badge')).toBeNull();
+      expect(screen.getByTestId('live-neutral-status').textContent).toContain('Unverified');
+      expect(container.querySelector('input[type="range"]')).toBeNull();
+    });
+
+    it('preserves VOD scrubber, time display, and hides LIVE badge for ordinary VOD', () => {
+      const { container } = render(
+        <PlaybackControls
+          status="PLAYING"
+          playbackMode="VOD"
+          broadcastStatus="ORDINARY_VOD"
+          currentTime={45}
+          duration={180}
+          playbackRate={1}
+          isOwnerOrMod={true}
+          theaterSetting="classic"
+          onPlay={() => {}}
+          onPause={() => {}}
+          onSeek={() => {}}
+          onEmergencyPause={() => {}}
+          onChangeVideoClick={() => {}}
+          onChangeRate={() => {}}
+          onChangeTheme={() => {}}
+        />
+      );
+
+      expect(screen.queryByTestId('live-badge')).toBeNull();
+      expect(container.querySelector('input[type="range"]')).not.toBeNull();
+      expect(screen.getByText('00:45')).toBeDefined();
+      expect(screen.getByText('03:00')).toBeDefined();
+    });
+  });
 });

@@ -3,6 +3,14 @@
 export type RoomPrivacy = 'PUBLIC' | 'PRIVATE';
 export type RoomRole = 'OWNER' | 'MODERATOR' | 'PARTICIPANT';
 export type VideoProviderType = 'YOUTUBE' | 'DIRECT' | 'HLS' | 'GOOGLE_DRIVE' | 'UNSUPPORTED';
+export type PlaybackMode = 'VOD' | 'LIVE';
+export type BroadcastStatus =
+  | 'UNKNOWN_UNVERIFIED'
+  | 'ACTIVE_LIVE'
+  | 'SCHEDULED_OR_WAITING'
+  | 'ENDED'
+  | 'RESTRICTED_OR_UNAVAILABLE'
+  | 'ORDINARY_VOD';
 
 export interface User {
   id: string;
@@ -57,6 +65,7 @@ export interface PlaybackSyncState {
   videoId: string;
   videoUrl?: string;
   provider: VideoProviderType;
+  playbackMode?: PlaybackMode;
   isPlaying: boolean;
   currentTime: number;
   serverTime: number;

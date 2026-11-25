@@ -13,9 +13,12 @@ import {
 import { copyToClipboard } from '../../lib/clipboard';
 import { getAppUrl } from '../../lib/api';
 import { ManualInviteModal } from './ManualInviteModal';
+import { BroadcastStatus, PlaybackMode } from '../../types';
 
 interface PlaybackControlsProps {
   status: 'PLAYING' | 'PAUSED' | 'BUFFERING';
+  playbackMode?: PlaybackMode;
+  broadcastStatus?: BroadcastStatus;
   currentTime: number;
   duration: number;
   playbackRate: number;
@@ -33,6 +36,8 @@ interface PlaybackControlsProps {
 
 export function PlaybackControls({
   status,
+  playbackMode = 'VOD',
+  broadcastStatus = 'UNKNOWN_UNVERIFIED',
   currentTime,
   duration,
   playbackRate,
@@ -51,6 +56,8 @@ export function PlaybackControls({
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [showRateMenu, setShowRateMenu] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
+
+  const isLiveMode = playbackMode === 'LIVE';
 
   const formatTime = (secs: number) => {
     if (isNaN(secs) || secs < 0) return '00:00';
@@ -88,29 +95,68 @@ export function PlaybackControls({
   return (
     <>
       <div className="w-full cinema-card p-4 border border-[#353535] shadow-2xl space-y-3">
-        {/* Top: Progress Scrubbing Bar */}
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-mono text-[#B9B9B9] w-12 text-right">
-            {formatTime(currentTime)}
-          </span>
+        {/* Top: Progress Scrubbing Bar (VOD) or LIVE Status Bar (LIVE) */}
+        {isLiveMode ? (
+          <div className="flex items-center justify-between gap-3 py-1" data-testid="live-status-bar">
+            {broadcastStatus === 'ACTIVE_LIVE' ? (
+              <div
+                data-testid="live-badge"
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#202020] border border-[#D6B56D]/60 text-[#F0D89F] text-xs font-bold tracking-wider uppercase"
+              >
+                <span className="w-2 h-2 rounded-full bg-[#D6B56D] animate-pulse" />
+                <span>LIVE</span>
+              </div>
+            ) : broadcastStatus === 'ENDED' ? (
+              <div
+                data-testid="live-neutral-status"
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#202020] border border-[#353535] text-[#B9B9B9] text-xs font-semibold"
+              >
+                <span>Broadcast Ended</span>
+              </div>
+            ) : broadcastStatus === 'RESTRICTED_OR_UNAVAILABLE' ? (
+              <div
+                data-testid="live-neutral-status"
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#202020] border border-[#353535] text-[#B9B9B9] text-xs font-semibold"
+              >
+                <span>Stream Unavailable</span>
+              </div>
+            ) : (
+              <div
+                data-testid="live-neutral-status"
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#202020] border border-[#353535] text-[#B9B9B9] text-xs font-semibold"
+              >
+                <span>Live Stream (Unverified)</span>
+              </div>
+            )}
 
-          <div className="flex-1 relative flex items-center group">
-            <input
-              type="range"
-              min={0}
-              max={duration || 100}
-              step={0.5}
-              value={currentTime}
-              disabled={!isOwnerOrMod}
-              onChange={(e) => onSeek(Number(e.target.value))}
-              className="w-full h-1.5 bg-[#202020] rounded-lg appearance-none cursor-pointer accent-[#D6B56D] disabled:cursor-not-allowed transition-all"
-            />
+            <span className="text-[11px] font-mono text-[#777777]">
+              Synchronized Broadcast Mode
+            </span>
           </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-mono text-[#B9B9B9] w-12 text-right">
+              {formatTime(currentTime)}
+            </span>
 
-          <span className="text-xs font-mono text-[#B9B9B9] w-12">
-            {formatTime(duration)}
-          </span>
-        </div>
+            <div className="flex-1 relative flex items-center group">
+              <input
+                type="range"
+                min={0}
+                max={duration || 100}
+                step={0.5}
+                value={currentTime}
+                disabled={!isOwnerOrMod}
+                onChange={(e) => onSeek(Number(e.target.value))}
+                className="w-full h-1.5 bg-[#202020] rounded-lg appearance-none cursor-pointer accent-[#D6B56D] disabled:cursor-not-allowed transition-all"
+              />
+            </div>
+
+            <span className="text-xs font-mono text-[#B9B9B9] w-12">
+              {formatTime(duration)}
+            </span>
+          </div>
+        )}
 
         {/* Bottom: Action Controls */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
@@ -144,34 +190,36 @@ export function PlaybackControls({
               </button>
             )}
 
-            {/* Speed Rate Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowRateMenu(!showRateMenu)}
-                className="px-2.5 py-2 rounded-xl text-xs font-mono font-semibold bg-[#202020] hover:bg-[#282828] text-[#FFFFFF] border border-[#353535] transition-colors cursor-pointer"
-              >
-                {playbackRate}x
-              </button>
-
-              {showRateMenu && (
-                <div
-                  className="absolute left-0 bottom-full mb-2 w-24 cinema-dropdown rounded-xl p-1 z-30 shadow-xl"
-                  onClick={() => setShowRateMenu(false)}
+            {/* Speed Rate Dropdown (VOD only) */}
+            {!isLiveMode && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowRateMenu(!showRateMenu)}
+                  className="px-2.5 py-2 rounded-xl text-xs font-mono font-semibold bg-[#202020] hover:bg-[#282828] text-[#FFFFFF] border border-[#353535] transition-colors cursor-pointer"
                 >
-                  {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((rate) => (
-                    <button
-                      key={rate}
-                      onClick={() => onChangeRate(rate)}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors ${
-                        playbackRate === rate ? 'bg-[#D6B56D] text-[#090909] font-bold' : 'text-[#B9B9B9] hover:bg-[#202020] hover:text-[#FFFFFF]'
-                      }`}
-                    >
-                      {rate}x
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+                  {playbackRate}x
+                </button>
+
+                {showRateMenu && (
+                  <div
+                    className="absolute left-0 bottom-full mb-2 w-24 cinema-dropdown rounded-xl p-1 z-30 shadow-xl"
+                    onClick={() => setShowRateMenu(false)}
+                  >
+                    {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((rate) => (
+                      <button
+                        key={rate}
+                        onClick={() => onChangeRate(rate)}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors ${
+                          playbackRate === rate ? 'bg-[#D6B56D] text-[#090909] font-bold' : 'text-[#B9B9B9] hover:bg-[#202020] hover:text-[#FFFFFF]'
+                        }`}
+                      >
+                        {rate}x
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Center: EMERGENCY PAUSE BUTTON (Accessible to ALL) */}

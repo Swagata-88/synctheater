@@ -1,10 +1,13 @@
-import { VideoProviderType } from '../database/types';
+import { VideoProviderType, PlaybackMode, BroadcastStatus } from '../database/types';
 import { db } from '../database';
+import { videoService } from '../modules/video/video.service';
 
 export interface RoomPlaybackState {
   roomId: string;
   roomSlug: string;
   provider: VideoProviderType;
+  playbackMode: PlaybackMode;
+  broadcastStatus: BroadcastStatus;
   videoId: string;
   videoUrl: string;
   status: 'PLAYING' | 'PAUSED' | 'BUFFERING';
@@ -34,12 +37,18 @@ export class RealtimeStateManager {
     let state = this.roomStates.get(roomId);
     if (!state) {
       const room = await db.findRoomById(roomId);
+      const initialVideoUrl = room?.currentVideoUrl || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+      const initialPlaybackMode: PlaybackMode =
+        videoService.resolveUrl(initialVideoUrl).playbackMode === 'LIVE' ? 'LIVE' : 'VOD';
+
       state = {
         roomId,
         roomSlug,
         provider: room?.currentProvider || 'YOUTUBE',
+        playbackMode: initialPlaybackMode,
+        broadcastStatus: 'UNKNOWN_UNVERIFIED',
         videoId: room?.currentVideoId || 'dQw4w9WgXcQ',
-        videoUrl: room?.currentVideoUrl || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        videoUrl: initialVideoUrl,
         status: 'PAUSED',
         currentPosition: 0,
         playbackRate: 1.0,
@@ -57,6 +66,9 @@ export class RealtimeStateManager {
    * Computes the authoritative elapsed position of the video based on wall-clock time
    */
   public calculateCurrentPosition(state: RoomPlaybackState): number {
+    if (state.playbackMode === 'LIVE') {
+      return 0;
+    }
     if (state.status !== 'PLAYING') {
       return state.currentPosition;
     }
@@ -83,7 +95,12 @@ export class RealtimeStateManager {
       throw new Error('Room is in Emergency Pause. Only the owner or moderator can resume.');
     }
 
-    const currentPos = reportedPosition !== undefined ? reportedPosition : this.calculateCurrentPosition(state);
+    const currentPos =
+      state.playbackMode === 'LIVE'
+        ? 0
+        : reportedPosition !== undefined
+        ? reportedPosition
+        : this.calculateCurrentPosition(state);
     state.currentPosition = currentPos;
     state.status = 'PLAYING';
     state.lastServerTimestamp = Date.now();
@@ -96,7 +113,12 @@ export class RealtimeStateManager {
     const state = this.roomStates.get(roomId);
     if (!state) throw new Error('Room state not found.');
 
-    const currentPos = reportedPosition !== undefined ? reportedPosition : this.calculateCurrentPosition(state);
+    const currentPos =
+      state.playbackMode === 'LIVE'
+        ? 0
+        : reportedPosition !== undefined
+        ? reportedPosition
+        : this.calculateCurrentPosition(state);
     state.currentPosition = currentPos;
     state.status = 'PAUSED';
     state.lastServerTimestamp = Date.now();
@@ -109,7 +131,7 @@ export class RealtimeStateManager {
     const state = this.roomStates.get(roomId);
     if (!state) throw new Error('Room state not found.');
 
-    state.currentPosition = Math.max(0, targetPosition);
+    state.currentPosition = state.playbackMode === 'LIVE' ? 0 : Math.max(0, targetPosition);
     state.lastServerTimestamp = Date.now();
     state.sequenceNumber += 1;
 
@@ -122,12 +144,15 @@ export class RealtimeStateManager {
       provider: VideoProviderType;
       videoId: string;
       videoUrl: string;
+      playbackMode?: PlaybackMode;
     }
   ): RoomPlaybackState {
     const state = this.roomStates.get(roomId);
     if (!state) throw new Error('Room state not found.');
 
     state.provider = data.provider;
+    state.playbackMode = data.playbackMode || 'VOD';
+    state.broadcastStatus = 'UNKNOWN_UNVERIFIED';
     state.videoId = data.videoId;
     state.videoUrl = data.videoUrl;
     state.currentPosition = 0;
@@ -146,6 +171,43 @@ export class RealtimeStateManager {
     }).catch(console.error);
 
     return state;
+  }
+
+  public confirmPlaybackMode(
+    roomId: string,
+    payload: {
+      videoId: string;
+      mode: PlaybackMode;
+      broadcastStatus: BroadcastStatus;
+      sequenceNumber?: number;
+    }
+  ): { state: RoomPlaybackState; changed: boolean } {
+    const state = this.roomStates.get(roomId);
+    if (!state) throw new Error('Room state not found.');
+
+    if (payload.videoId !== state.videoId) {
+      throw new Error('STALE_VIDEO_CONFIRMATION');
+    }
+
+    if (payload.sequenceNumber !== undefined && payload.sequenceNumber < state.sequenceNumber) {
+      throw new Error('STALE_SEQUENCE');
+    }
+
+    if (state.playbackMode === payload.mode && state.broadcastStatus === payload.broadcastStatus) {
+      return { state, changed: false };
+    }
+
+    state.playbackMode = payload.mode;
+    state.broadcastStatus = payload.broadcastStatus;
+    if (state.playbackMode === 'LIVE') {
+      state.currentPosition = 0;
+    }
+    state.lastServerTimestamp = Date.now();
+    state.sequenceNumber += 1;
+
+    // CRITICAL INVARIANT: Never clear isEmergencyPaused or resume playback via mode confirmation
+
+    return { state, changed: true };
   }
 
   public setPlaybackRate(roomId: string, rate: number): RoomPlaybackState {

@@ -82,6 +82,7 @@ function TheaterRoomContent() {
     handleSendMessage,
     handleSendReaction,
     handleChangeVideo,
+    confirmPlaybackMode,
     handlePasswordSubmit,
     handleKickParticipant,
     handleTransferOwnership,
@@ -232,12 +233,15 @@ function TheaterRoomContent() {
             {/* Video Player */}
             <VideoPlayer
               provider={playbackState.provider}
+              playbackMode={playbackState.playbackMode || 'VOD'}
+              broadcastStatus={playbackState.broadcastStatus || 'UNKNOWN_UNVERIFIED'}
               videoId={playbackState.videoId}
               videoUrl={playbackState.videoUrl}
               status={playbackState.status}
               currentPosition={playbackState.currentPosition}
               playbackRate={playbackState.playbackRate}
               lastServerTimestamp={playbackState.lastServerTimestamp}
+              sequenceNumber={playbackState.sequenceNumber}
               isOwnerOrMod={isOwnerOrMod}
               isEmergencyPaused={playbackState.isEmergencyPaused}
               onTimeUpdate={(c, d) => {
@@ -247,11 +251,14 @@ function TheaterRoomContent() {
               onPlayAction={handlePlay}
               onPauseAction={handlePause}
               onSeekAction={handleSeek}
+              onBroadcastClassification={isOwnerOrMod ? confirmPlaybackMode : undefined}
             />
 
             {/* Bottom Playback Controls */}
             <PlaybackControls
               status={playbackState.status}
+              playbackMode={playbackState.playbackMode || 'VOD'}
+              broadcastStatus={playbackState.broadcastStatus || 'UNKNOWN_UNVERIFIED'}
               currentTime={currentTime}
               duration={duration}
               playbackRate={playbackState.playbackRate}

@@ -2,16 +2,28 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
+
+import { PlaybackMode, BroadcastStatus } from '../../types';
+import { classifyYouTubeBroadcast } from '../../lib/broadcastClassifier';
+
+const LIVE_STALL_THRESHOLD_MS = 10000;
+const LIVE_RECOVERY_COOLDOWN_MS = 15000;
+const MAX_LIVE_AUTO_RECOVERY_ATTEMPTS = 2;
+const LIVE_RECONNECT_TIMEOUT_MS = 12000;
+const LIVE_CLASSIFICATION_SAMPLE_INTERVAL_MS = 2000;
 
 interface VideoPlayerProps {
   provider: 'YOUTUBE' | 'DIRECT' | 'HLS' | 'GOOGLE_DRIVE' | 'UNSUPPORTED';
+  playbackMode?: PlaybackMode;
+  broadcastStatus?: BroadcastStatus;
   videoId: string;
   videoUrl: string;
   status: 'PLAYING' | 'PAUSED' | 'BUFFERING';
   currentPosition: number;
   playbackRate: number;
   lastServerTimestamp: number;
+  sequenceNumber?: number;
   isOwnerOrMod: boolean;
   isEmergencyPaused?: boolean;
   onPlayerReady?: () => void;
@@ -19,6 +31,13 @@ interface VideoPlayerProps {
   onPlayAction?: () => void;
   onPauseAction?: () => void;
   onSeekAction?: (time: number) => void;
+  onBroadcastClassification?: (classification: {
+    videoId: string;
+    mode: PlaybackMode;
+    broadcastStatus: BroadcastStatus;
+    sequenceNumber?: number;
+  }) => void;
+  onAutoplayBlocked?: () => void;
 }
 
 declare global {
@@ -30,12 +49,15 @@ declare global {
 
 export function VideoPlayer({
   provider,
+  playbackMode = 'VOD',
+  broadcastStatus = 'UNKNOWN_UNVERIFIED',
   videoId,
   videoUrl,
   status,
   currentPosition,
   playbackRate,
   lastServerTimestamp,
+  sequenceNumber,
   isOwnerOrMod,
   isEmergencyPaused,
   onPlayerReady,
@@ -43,18 +65,84 @@ export function VideoPlayer({
   onPlayAction,
   onPauseAction,
   onSeekAction,
+  onBroadcastClassification,
+  onAutoplayBlocked,
 }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoElementRef = useRef<HTMLVideoElement>(null);
   const ytPlayerRef = useRef<any>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const playbackModeRef = useRef<PlaybackMode>(playbackMode);
+  const broadcastStatusRef = useRef<BroadcastStatus>(broadcastStatus);
+  const statusRef = useRef(status);
+  const isEmergencyPausedRef = useRef(Boolean(isEmergencyPaused));
+  const isOwnerOrModRef = useRef(isOwnerOrMod);
+  const sequenceNumberRef = useRef(sequenceNumber);
+  const onBroadcastClassificationRef = useRef(onBroadcastClassification);
+  const onAutoplayBlockedRef = useRef(onAutoplayBlocked);
+  const durationSamplesRef = useRef<number[]>([]);
+  const lastReportedStatusRef = useRef<BroadcastStatus | null>(null);
+
+  // Bounded LIVE stall recovery & manual reconnect refs
+  const recoveryAttemptsRef = useRef(0);
+  const isRecoveringRef = useRef(false);
+  const lastRecoveryAttemptAtRef = useRef(0);
+  const stallStartedAtRef = useRef<number | null>(null);
+  const lastLoadedFractionRef = useRef(-1);
+  const isReconnectingRef = useRef(false);
+  const playerGenerationRef = useRef(0);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectGenerationRef = useRef(0);
+  const lastClassificationSampleAtRef = useRef(0);
+  const evaluateClassificationRef = useRef<
+    ((params: { playerState?: number; errorCode?: number; autoplayBlocked?: boolean }) => void) | null
+  >(null);
+
+  playbackModeRef.current = playbackMode;
+  broadcastStatusRef.current = broadcastStatus;
+  statusRef.current = status;
+  isEmergencyPausedRef.current = Boolean(isEmergencyPaused);
+  isOwnerOrModRef.current = isOwnerOrMod;
+  sequenceNumberRef.current = sequenceNumber;
+  onBroadcastClassificationRef.current = onBroadcastClassification;
+  onAutoplayBlockedRef.current = onAutoplayBlocked;
 
   const [isReady, setIsReady] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [showManualReconnect, setShowManualReconnect] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
+
+  const clearReconnectTimer = () => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+  };
+
+  // Reset per-video classification telemetry and recovery state on video change
+  useEffect(() => {
+    clearReconnectTimer();
+    reconnectGenerationRef.current += 1;
+    durationSamplesRef.current = [];
+    lastReportedStatusRef.current = null;
+    lastClassificationSampleAtRef.current = 0;
+    recoveryAttemptsRef.current = 0;
+    isRecoveringRef.current = false;
+    lastRecoveryAttemptAtRef.current = 0;
+    stallStartedAtRef.current = null;
+    lastLoadedFractionRef.current = -1;
+    isReconnectingRef.current = false;
+    setIsReady(false);
+    setShowManualReconnect(false);
+    setIsReconnecting(false);
+    setReconnectError(null);
+  }, [provider, videoId]);
 
   // Calculate authoritative effective position
   const getAuthoritativePosition = () => {
+    if (playbackMode === 'LIVE') return 0;
     if (status !== 'PLAYING') return currentPosition;
     const elapsed = (Date.now() - lastServerTimestamp) / 1000;
     return Math.max(0, currentPosition + elapsed * playbackRate);
@@ -65,20 +153,67 @@ export function VideoPlayer({
     if (provider !== 'YOUTUBE') return;
 
     let isSubscribed = true;
+    let isTearingDown = false;
+    const myGeneration = ++playerGenerationRef.current;
+
+    const evaluateClassification = (params: {
+      playerState?: number;
+      errorCode?: number;
+      autoplayBlocked?: boolean;
+    }) => {
+      if (!isSubscribed || myGeneration !== playerGenerationRef.current) return;
+
+      const result = classifyYouTubeBroadcast({
+        playerState: params.playerState,
+        errorCode: params.errorCode,
+        autoplayBlocked: params.autoplayBlocked,
+        isApplicationStop: isTearingDown,
+        urlPlaybackIntent: playbackModeRef.current,
+        durationSamples: durationSamplesRef.current,
+        currentStatus: lastReportedStatusRef.current || broadcastStatusRef.current,
+      });
+
+      if (
+        result.isConfirmed &&
+        isOwnerOrModRef.current &&
+        result.broadcastStatus !== lastReportedStatusRef.current
+      ) {
+        lastReportedStatusRef.current = result.broadcastStatus;
+        onBroadcastClassificationRef.current?.({
+          videoId,
+          mode: result.recommendedMode,
+          broadcastStatus: result.broadcastStatus,
+          sequenceNumber: sequenceNumberRef.current,
+        });
+      }
+    };
+    evaluateClassificationRef.current = evaluateClassification;
 
     const initYT = () => {
-      if (!window.YT || !window.YT.Player) return;
+      if (!window.YT || !window.YT.Player || !isSubscribed || myGeneration !== playerGenerationRef.current) {
+        return;
+      }
+
+      // Reset readiness and clear pending reconnect timers before replacing old player
+      setIsReady(false);
+      clearReconnectTimer();
+      reconnectGenerationRef.current += 1;
+      isReconnectingRef.current = false;
+      setIsReconnecting(false);
 
       if (ytPlayerRef.current) {
+        isTearingDown = true;
         try {
           ytPlayerRef.current.destroy();
         } catch (e) {}
+        ytPlayerRef.current = null;
+        isTearingDown = false;
       }
 
       ytPlayerRef.current = new window.YT.Player('synctheater-yt-iframe', {
         videoId,
         playerVars: {
-          autoplay: status === 'PLAYING' ? 1 : 0,
+          autoplay: statusRef.current === 'PLAYING' ? 1 : 0,
           controls: isOwnerOrMod ? 1 : 0,
           disablekb: isOwnerOrMod ? 0 : 1,
           fs: 1,
@@ -88,19 +223,64 @@ export function VideoPlayer({
         },
         events: {
           onReady: (event: any) => {
-            if (!isSubscribed) return;
+            if (!isSubscribed || myGeneration !== playerGenerationRef.current) return;
             setIsReady(true);
             onPlayerReady?.();
+
+            if (playbackModeRef.current === 'LIVE') {
+              // LIVE initialization: never seekTo(0) or seekTo(getDuration())
+              if (statusRef.current === 'PLAYING') {
+                event.target.playVideo();
+              } else {
+                event.target.pauseVideo();
+              }
+              return;
+            }
+
+            // VOD initialization
             const targetPos = getAuthoritativePosition();
             event.target.seekTo(targetPos, true);
-            if (status === 'PLAYING') {
+            if (statusRef.current === 'PLAYING') {
               event.target.playVideo();
             } else {
               event.target.pauseVideo();
             }
           },
           onStateChange: (event: any) => {
-            // Can monitor local buffering or user actions
+            if (!isSubscribed || isTearingDown || myGeneration !== playerGenerationRef.current) return;
+            const playerState = event?.data;
+            if (playerState === 1) {
+              const d = event?.target?.getDuration?.();
+              if (typeof d === 'number' && Number.isFinite(d)) {
+                durationSamplesRef.current = [...durationSamplesRef.current.slice(-4), d];
+                lastClassificationSampleAtRef.current = Date.now();
+              }
+              if (
+                playbackModeRef.current === 'LIVE' &&
+                statusRef.current === 'PLAYING' &&
+                !isEmergencyPausedRef.current
+              ) {
+                clearReconnectTimer();
+                reconnectGenerationRef.current += 1;
+                recoveryAttemptsRef.current = 0;
+                stallStartedAtRef.current = null;
+                isRecoveringRef.current = false;
+                isReconnectingRef.current = false;
+                setIsReconnecting(false);
+                setReconnectError(null);
+                setShowManualReconnect(false);
+              }
+            }
+            evaluateClassification({ playerState });
+          },
+          onError: (event: any) => {
+            if (!isSubscribed || isTearingDown || myGeneration !== playerGenerationRef.current) return;
+            evaluateClassification({ errorCode: event?.data });
+          },
+          onAutoplayBlocked: () => {
+            if (!isSubscribed || isTearingDown || myGeneration !== playerGenerationRef.current) return;
+            onAutoplayBlockedRef.current?.();
+            evaluateClassification({ autoplayBlocked: true });
           },
         },
       });
@@ -117,12 +297,19 @@ export function VideoPlayer({
         firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
       }
       window.onYouTubeIframeAPIReady = () => {
-        if (isSubscribed) initYT();
+        if (isSubscribed && myGeneration === playerGenerationRef.current) initYT();
       };
     }
 
     return () => {
+      isTearingDown = true;
       isSubscribed = false;
+      playerGenerationRef.current += 1;
+      evaluateClassificationRef.current = null;
+      clearReconnectTimer();
+      reconnectGenerationRef.current += 1;
+      isReconnectingRef.current = false;
+      setIsReady(false);
       if (ytPlayerRef.current) {
         try {
           ytPlayerRef.current.destroy();
@@ -138,6 +325,9 @@ export function VideoPlayer({
     const video = videoElementRef.current;
     if (!video) return;
 
+    let isSubscribed = true;
+    setIsReady(false);
+
     if (provider === 'HLS' && videoUrl.includes('.m3u8')) {
       if (Hls.isSupported()) {
         if (hlsRef.current) {
@@ -147,6 +337,7 @@ export function VideoPlayer({
         hls.loadSource(videoUrl);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (!isSubscribed) return;
           setIsReady(true);
           onPlayerReady?.();
           const target = getAuthoritativePosition();
@@ -161,6 +352,7 @@ export function VideoPlayer({
     } else if (provider === 'DIRECT') {
       video.src = videoUrl;
       video.onloadedmetadata = () => {
+        if (!isSubscribed) return;
         setIsReady(true);
         onPlayerReady?.();
         const target = getAuthoritativePosition();
@@ -170,6 +362,8 @@ export function VideoPlayer({
     }
 
     return () => {
+      isSubscribed = false;
+      setIsReady(false);
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -177,9 +371,86 @@ export function VideoPlayer({
     };
   }, [provider, videoUrl]);
 
-  // --- DRIFT COMPENSATION & SYNCHRONIZATION LOOP ---
+  // --- DRIFT COMPENSATION (VOD), BOUNDED STALL RECOVERY (LIVE) & PERIODIC CLASSIFICATION SAMPLING ---
   useEffect(() => {
+    const sampleDurationIfUnverified = (ytState: number) => {
+      const currentClassified = lastReportedStatusRef.current || broadcastStatusRef.current;
+      if (
+        ytState === 1 &&
+        status === 'PLAYING' &&
+        !isEmergencyPaused &&
+        currentClassified === 'UNKNOWN_UNVERIFIED'
+      ) {
+        const now = Date.now();
+        if (now - lastClassificationSampleAtRef.current >= LIVE_CLASSIFICATION_SAMPLE_INTERVAL_MS) {
+          const d = ytPlayerRef.current?.getDuration?.();
+          if (typeof d === 'number' && Number.isFinite(d)) {
+            durationSamplesRef.current = [...durationSamplesRef.current.slice(-4), d];
+            lastClassificationSampleAtRef.current = now;
+            evaluateClassificationRef.current?.({ playerState: 1 });
+          }
+        }
+      }
+    };
+
     const syncInterval = setInterval(() => {
+      if (playbackMode === 'LIVE') {
+        // VOD drift-correction loop is completely bypassed in LIVE mode (no seekTo)
+        if (
+          provider === 'YOUTUBE' &&
+          ytPlayerRef.current &&
+          isReady &&
+          status === 'PLAYING' &&
+          !isEmergencyPaused
+        ) {
+          try {
+            const ytState = ytPlayerRef.current.getPlayerState?.();
+            if (ytState === 1) {
+              stallStartedAtRef.current = null;
+              sampleDurationIfUnverified(ytState);
+              return;
+            }
+
+            if (!showManualReconnect && (ytState === 3 || ytState === 2)) {
+              const now = Date.now();
+              const loadedFrac = ytPlayerRef.current.getVideoLoadedFraction?.() ?? 0;
+
+              if (stallStartedAtRef.current === null) {
+                stallStartedAtRef.current = now;
+                lastLoadedFractionRef.current = loadedFrac;
+              } else if (loadedFrac > lastLoadedFractionRef.current) {
+                // Buffer is actively advancing: ordinary buffering, not stalled
+                stallStartedAtRef.current = now;
+                lastLoadedFractionRef.current = loadedFrac;
+              } else if (now - stallStartedAtRef.current >= LIVE_STALL_THRESHOLD_MS) {
+                const cooldownElapsed =
+                  lastRecoveryAttemptAtRef.current === 0 ||
+                  now - lastRecoveryAttemptAtRef.current >= LIVE_RECOVERY_COOLDOWN_MS;
+
+                if (!isRecoveringRef.current && cooldownElapsed) {
+                  if (recoveryAttemptsRef.current < MAX_LIVE_AUTO_RECOVERY_ATTEMPTS) {
+                    isRecoveringRef.current = true;
+                    recoveryAttemptsRef.current += 1;
+                    lastRecoveryAttemptAtRef.current = now;
+                    stallStartedAtRef.current = null;
+                    try {
+                      ytPlayerRef.current.playVideo();
+                    } finally {
+                      isRecoveringRef.current = false;
+                    }
+                  } else {
+                    setShowManualReconnect(true);
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            isRecoveringRef.current = false;
+          }
+        }
+        return;
+      }
+
       const authPos = getAuthoritativePosition();
 
       // YouTube Sync
@@ -194,6 +465,8 @@ export function VideoPlayer({
           setDuration(d);
           setCurrentTime(localYtTime);
           onTimeUpdate?.(localYtTime, d);
+
+          sampleDurationIfUnverified(ytState);
 
           // State synchronization
           if (status === 'PLAYING' && ytState !== 1) {
@@ -238,11 +511,18 @@ export function VideoPlayer({
     }, 1000);
 
     return () => clearInterval(syncInterval);
-  }, [provider, status, currentPosition, playbackRate, lastServerTimestamp, isReady]);
+  }, [provider, playbackMode, status, isEmergencyPaused, showManualReconnect, currentPosition, playbackRate, lastServerTimestamp, isReady]);
 
-  // Immediate Pause Trigger on Emergency Pause or State Transition
+  // Immediate Pause/Play Trigger on Emergency Pause or State Transition
   useEffect(() => {
-    if ((status === 'PAUSED' || isEmergencyPaused) && isReady) {
+    if (!isReady) return;
+    if (status === 'PAUSED' || isEmergencyPaused) {
+      stallStartedAtRef.current = null;
+      isRecoveringRef.current = false;
+      clearReconnectTimer();
+      reconnectGenerationRef.current += 1;
+      isReconnectingRef.current = false;
+      setIsReconnecting(false);
       if (provider === 'YOUTUBE' && ytPlayerRef.current) {
         try {
           ytPlayerRef.current.pauseVideo();
@@ -250,8 +530,49 @@ export function VideoPlayer({
       } else if ((provider === 'DIRECT' || provider === 'HLS') && videoElementRef.current) {
         videoElementRef.current.pause();
       }
+    } else if (playbackMode === 'LIVE' && status === 'PLAYING' && provider === 'YOUTUBE' && ytPlayerRef.current) {
+      try {
+        ytPlayerRef.current.playVideo();
+      } catch (e) {}
     }
-  }, [status, isEmergencyPaused, provider, isReady]);
+  }, [status, isEmergencyPaused, playbackMode, provider, isReady]);
+
+  const handleManualReconnect = () => {
+    if (
+      playbackMode !== 'LIVE' ||
+      provider !== 'YOUTUBE' ||
+      status !== 'PLAYING' ||
+      isEmergencyPaused ||
+      isReconnectingRef.current ||
+      !ytPlayerRef.current
+    ) {
+      return;
+    }
+
+    clearReconnectTimer();
+    const myReconnectGen = ++reconnectGenerationRef.current;
+    isReconnectingRef.current = true;
+    setIsReconnecting(true);
+    setReconnectError(null);
+
+    reconnectTimeoutRef.current = setTimeout(() => {
+      if (myReconnectGen !== reconnectGenerationRef.current) return;
+      reconnectTimeoutRef.current = null;
+      isReconnectingRef.current = false;
+      setIsReconnecting(false);
+      setReconnectError('Reconnect timed out. Please try again.');
+    }, LIVE_RECONNECT_TIMEOUT_MS);
+
+    try {
+      ytPlayerRef.current.loadVideoById({ videoId });
+    } catch (e) {
+      clearReconnectTimer();
+      reconnectGenerationRef.current += 1;
+      isReconnectingRef.current = false;
+      setIsReconnecting(false);
+      setReconnectError('Unable to reconnect. Please try again.');
+    }
+  };
 
   return (
     <div
@@ -260,8 +581,30 @@ export function VideoPlayer({
     >
       {/* 1. YOUTUBE PLAYER CONTAINER */}
       {provider === 'YOUTUBE' && (
-        <div className="w-full h-full">
+        <div className="relative w-full h-full">
           <div id="synctheater-yt-iframe" className="w-full h-full pointer-events-auto" />
+          {playbackMode === 'LIVE' && showManualReconnect && status === 'PLAYING' && !isEmergencyPaused && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#090909]/85 backdrop-blur-sm p-6 text-center">
+              <p className="text-sm font-semibold text-[#FFFFFF] mb-2">
+                Live stream playback appears stalled.
+              </p>
+              {reconnectError && (
+                <p className="text-xs text-[#F0D89F] mb-3" data-testid="reconnect-error">
+                  {reconnectError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleManualReconnect}
+                disabled={isReconnecting}
+                data-testid="manual-reconnect-btn"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold btn-gold-primary shadow-lg disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <RefreshCw className={`w-4 h-4 ${isReconnecting ? 'animate-spin' : ''}`} />
+                <span>{isReconnecting ? 'Reconnecting...' : 'Reconnect to Live Stream'}</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 

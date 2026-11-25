@@ -2,6 +2,14 @@ export type Role = 'USER' | 'ADMIN';
 export type RoomRole = 'OWNER' | 'MODERATOR' | 'PARTICIPANT';
 export type RoomPrivacy = 'PUBLIC' | 'PRIVATE';
 export type VideoProviderType = 'YOUTUBE' | 'DIRECT' | 'HLS' | 'GOOGLE_DRIVE' | 'UNSUPPORTED';
+export type PlaybackMode = 'VOD' | 'LIVE';
+export type BroadcastStatus =
+  | 'UNKNOWN_UNVERIFIED'
+  | 'ACTIVE_LIVE'
+  | 'SCHEDULED_OR_WAITING'
+  | 'ENDED'
+  | 'RESTRICTED_OR_UNAVAILABLE'
+  | 'ORDINARY_VOD';
 export type RoomStatus = 'ACTIVE' | 'CLOSING' | 'CLOSED';
 export type SessionStatus = 'ACTIVE' | 'CLOSING' | 'CLOSED';
 export type ClosureReason =

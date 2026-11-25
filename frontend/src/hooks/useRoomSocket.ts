@@ -6,10 +6,12 @@ import { getSocket } from '../lib/socket';
 import { apiRequest } from '../lib/api';
 import { Participant } from '../components/theater/ParticipantPanel';
 import { ChatMsg } from '../components/chat/ChatPanel';
-import { VideoProviderType } from '../types';
+import { VideoProviderType, PlaybackMode, BroadcastStatus } from '../types';
 
 export interface PlaybackState {
   provider: VideoProviderType;
+  playbackMode?: PlaybackMode;
+  broadcastStatus?: BroadcastStatus;
   videoId: string;
   videoUrl: string;
   status: 'PLAYING' | 'PAUSED' | 'BUFFERING';
@@ -46,6 +48,8 @@ export function useRoomSocket({ slug, inviteToken, user }: UseRoomSocketOptions)
   // Playback State
   const [playbackState, setPlaybackState] = useState<PlaybackState>({
     provider: 'YOUTUBE',
+    playbackMode: 'VOD',
+    broadcastStatus: 'UNKNOWN_UNVERIFIED',
     videoId: 'dQw4w9WgXcQ',
     videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
     status: 'PAUSED',
@@ -354,6 +358,18 @@ export function useRoomSocket({ slug, inviteToken, user }: UseRoomSocketOptions)
     return res;
   }, [slug, socket, router]);
 
+  const confirmPlaybackMode = useCallback(
+    (payload: {
+      videoId: string;
+      mode: PlaybackMode;
+      broadcastStatus: BroadcastStatus;
+      sequenceNumber?: number;
+    }) => {
+      socket.emit('NOTIFY_PLAYBACK_MODE_CONFIRMED', payload);
+    },
+    [socket]
+  );
+
   return {
     room,
     participants,
@@ -376,6 +392,7 @@ export function useRoomSocket({ slug, inviteToken, user }: UseRoomSocketOptions)
     handleSendMessage,
     handleSendReaction,
     handleChangeVideo,
+    confirmPlaybackMode,
     handlePasswordSubmit,
     handleKickParticipant,
     handleTransferOwnership,
